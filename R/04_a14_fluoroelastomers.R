@@ -16,11 +16,15 @@ extract_a14 <- function() {
     tab <- tab[-wrap_idx, ]
   }
 
-  products <- unlist(tab, use.names = FALSE)
-  products <- products[!is.na(products) & str_trim(products) != ""]
+  # point 16: tag each product with the sector its column came from
+  long <- map_dfr(names(tab), function(sector) {
+    vals <- tab[[sector]]
+    vals <- vals[!is.na(vals) & str_trim(vals) != ""]
+    tibble(product = paste0(vals, " (", sector, ")"))
+  })
 
   tibble(
-    product = products,
+    product = long$product,
     substance_name = "Fluoroelastomers",
     abbreviation = "FKM",
     cas_number = NA_character_,

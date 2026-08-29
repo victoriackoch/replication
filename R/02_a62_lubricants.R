@@ -69,6 +69,18 @@ extract_a62 <- function() {
     tab <- tab[-wrap_idx, ]
   }
 
+  # page-spill: "...oxygen delivery systems and oxygen heating" / "systems"
+  # (point 20) -- a bare one-word Application continuation with no
+  # sector_subuse of its own
+  spill_idx <- which(is.na(tab$sector_subuse) & str_trim(coalesce(tab$application, "")) == "systems")
+  if (length(spill_idx) == 1 && spill_idx > 1) {
+    tab$application[spill_idx - 1] <- paste(tab$application[spill_idx - 1], tab$application[spill_idx])
+    tab <- tab[-spill_idx, ]
+  }
+
+  # strip trailing footnote-reference numbers (point 20), e.g. "Machinery93" -> "Machinery"
+  tab$sector_subuse <- str_remove(tab$sector_subuse, "(?<=[A-Za-z])[0-9]{2,3}$")
+
   tab$sector_subuse <- ffill(tab$sector_subuse)
   product <- apply(tab[c("sector_subuse", "application")], 1, function(r) {
     r <- r[!is.na(r) & str_trim(r) != ""]

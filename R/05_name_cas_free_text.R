@@ -29,30 +29,25 @@ extract_a70 <- function() {
 
 extract_a90 <- function() {
   tab <- load_table("A.90")
-  use <- ffill(tab[["Use"]])
-  subuse <- tab[["Sub-Use"]]
+  use <- ffill(strip_footnote_number(tab[["Use"]]))
+  subuse <- strip_footnote_number(tab[["Sub-Use"]])
   examples <- tab[["Examples of PFAS used"]]
 
-  product <- map2_chr(use, subuse, function(u, s) {
-    parts <- c(u, s)
-    parts <- parts[!is.na(parts) & str_trim(parts) != ""]
-    if (length(parts) == 0) NA_character_ else paste(parts, collapse = " / ")
-  })
-
-  out <- map(seq_along(product), function(i) {
-    if (is.na(product[i])) return(NULL)
+  out <- map(seq_len(nrow(tab)), function(i) {
+    products <- cross_product_products(use[i], subuse[i])
+    if (length(products) == 0) return(NULL)
     txt <- examples[i]
     pairs <- extract_name_cas_pairs(txt)
     if (nrow(pairs) > 0) {
-      return(map2_dfr(pairs$name, pairs$cas, function(nm, cas) {
-        make_row_raw(product[i], nm, cas_number = cas, source = "A.90",
-                      source_text = txt)
-      }))
+      return(expand_grid(product = products, row = seq_len(nrow(pairs))) %>%
+        { make_row_raw(.$product, pairs$name[.$row], cas_number = pairs$cas[.$row],
+                        source = "A.90", source_text = txt) })
     }
     # no embedded CAS at all in this cell -- fall back to a plain name list
     subs <- split_substance_list(txt)
     if (length(subs) == 0) return(NULL)
-    make_row_raw(product[i], subs, source = "A.90", source_text = txt)
+    expand_grid(product = products, sub = subs) %>%
+      { make_row_raw(.$product, .$sub, source = "A.90", source_text = txt) }
   })
   bind_rows(out)
 }

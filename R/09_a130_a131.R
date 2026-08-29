@@ -5,17 +5,23 @@
 extract_a130 <- function() {
   tab <- load_table("A.130")
   names(tab)[c(1, 3, 6)] <- c("substance_name", "cas", "regulatory_program")
-  parsed <- map(tab$substance_name, parse_name_abbrev)
   keep <- !is.na(tab$regulatory_program) & str_trim(tab$regulatory_program) != "" &
     !is.na(tab$substance_name)
-  make_row(
-    product = tab$regulatory_program[keep],
-    substance_name = ifelse(is.na(map_chr(parsed, "name"))[keep], tab$substance_name[keep], map_chr(parsed, "name")[keep]),
-    abbreviation = map_chr(parsed, "abbrev")[keep],
-    cas_number = tab$cas[keep],
-    source = "A.130",
-    source_text = paste0("A.130 row: ", tab$substance_name[keep])
-  )
+  tab <- tab[keep, , drop = FALSE]
+  out <- map(seq_len(nrow(tab)), function(i) {
+    triple <- process_substance_triple(tab$substance_name[i], NA_character_, tab$cas[i], "A.130")
+    make_row(
+      product = tab$regulatory_program[i],
+      substance_name = triple$substance_name,
+      abbreviation = triple$abbreviation,
+      cas_number = triple$cas_number,
+      source = "A.130",
+      source_text = paste0("A.130 row: ", tab$substance_name[i]),
+      substance_synonym = triple$substance_synonym,
+      substance_group = triple$substance_group
+    )
+  })
+  bind_rows(out)
 }
 
 # A.131 (EU approved biocidal active substances): "Product-type" lists one
@@ -40,17 +46,20 @@ split_product_types <- function(text) {
 extract_a131 <- function() {
   tab <- load_table("A.131")
   names(tab)[c(1, 3, 5)] <- c("substance_name", "cas", "product_type")
-  parsed <- map(tab$substance_name, parse_name_abbrev)
   out <- map(seq_len(nrow(tab)), function(i) {
     types <- split_product_types(tab$product_type[i])
-    tibble(
-      product = types,
-      substance_name = if (is.na(parsed[[i]]$name)) tab$substance_name[i] else parsed[[i]]$name,
-      abbreviation = parsed[[i]]$abbrev,
-      cas_number = tab$cas[i],
-      source = "A.131",
-      source_text = paste0("A.131 row: ", tab$substance_name[i])
-    )
+    triple <- process_substance_triple(tab$substance_name[i], NA_character_, tab$cas[i], "A.131")
+    # cross the product-types against the (usually single) substance result
+    expand_grid(product = types, row = seq_len(nrow(triple))) %>%
+      mutate(
+        substance_name = triple$substance_name[row],
+        substance_synonym = triple$substance_synonym[row],
+        substance_group = triple$substance_group[row],
+        cas_number = triple$cas_number[row],
+        abbreviation = triple$abbreviation[row]
+      ) %>%
+      select(-row) %>%
+      mutate(source = "A.131", source_text = paste0("A.131 row: ", tab$substance_name[i]))
   })
   bind_rows(out)
 }

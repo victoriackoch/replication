@@ -66,11 +66,16 @@ ffill <- function(x) {
 # One row of the final long table, when the source already gives a clean,
 # separate substance name and abbreviation (e.g. A.100, A.104, A.105).
 make_row <- function(product, substance_name, abbreviation = NA_character_,
-                      cas_number = NA_character_, source, source_text) {
+                      cas_number = NA_character_, source, source_text,
+                      substance_synonym = NA_character_, abbreviation_synonym = NA_character_,
+                      substance_group = NA_character_) {
   tibble(
     product = product,
     substance_name = substance_name,
+    substance_synonym = substance_synonym,
     abbreviation = abbreviation,
+    abbreviation_synonym = abbreviation_synonym,
+    substance_group = substance_group,
     cas_number = cas_number,
     source = source,
     source_text = source_text
@@ -90,7 +95,11 @@ make_row <- function(product, substance_name, abbreviation = NA_character_,
 # "confidential" that also happen to be short.
 is_acronym_token <- function(x) {
   x <- str_trim(x)
-  str_detect(x, "^[A-Za-z0-9][A-Za-z0-9\\-]{1,9}$") && str_count(x, "[A-Z]") >= 2
+  # ordinary abbreviation (PTFE, PFHxA, LiTFSI, GenX)
+  plain <- str_detect(x, "^[A-Za-z0-9][A-Za-z0-9\\-]{1,9}$") && str_count(x, "[A-Z]") >= 2
+  # chain-length-tagged abbreviation (6:2 FTOH, 8:2 FTS, 6:2-8:2 FTOH)
+  chain_tagged <- str_detect(x, "^[0-9]+:[0-9]+(-[0-9]+:[0-9]+)?\\s+[A-Za-z][A-Za-z0-9]{1,9}$")
+  plain || chain_tagged
 }
 
 parse_name_abbrev <- function(token) {
@@ -156,7 +165,10 @@ make_row_raw <- function(product, raw_substance, cas_number = NA_character_,
   tibble(
     product = product,
     substance_name = map_chr(parsed, "name"),
+    substance_synonym = NA_character_,
     abbreviation = map_chr(parsed, "abbrev"),
+    abbreviation_synonym = NA_character_,
+    substance_group = NA_character_,
     cas_number = cas_number,
     source = source,
     source_text = source_text

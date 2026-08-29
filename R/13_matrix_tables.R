@@ -41,20 +41,41 @@ extract_a78 <- function() {
   melt_matrix(product, substance_cols, tab, col_to_token, "A.78", src_text)
 }
 
+# Splits a "device1, device2, device3 and device4" list into its items,
+# treating only the LAST " and " as a list conjunction (not a compound
+# device name like "implantable defibrillator/cardioverter").
+split_list_text <- function(text) {
+  positions <- str_locate_all(text, " and ")[[1]]
+  if (nrow(positions) > 0) {
+    last <- positions[nrow(positions), ]
+    text <- paste0(str_sub(text, 1, last[1] - 1), ",", str_sub(text, last[2] + 1))
+  }
+  parts <- str_trim(str_split(text, ",")[[1]])
+  parts[parts != ""]
+}
+
 extract_a123 <- function() {
   tab <- load_table("A.123")
   names(tab)[1:2] <- c("specialty", "devices")
-  product <- paste(tab$specialty, tab$devices, sep = " / ")
 
   # A.123 is a general materials table (Teo et al. 2016) covering many
   # non-fluorinated polymers for comparison -- PE, PA, PDMS, PHA, PET, PP,
   # Silicone, LCP, Parylene, PMMA, PEK, PI, SU8 are not PFAS. Only the PTFE
   # column is in scope here.
+  #
+  # Point 13: product is the individual device/use, NOT the overarching
+  # specialty category (e.g. "Cardiovascular") -- the comma-separated
+  # device list is split into one product row per device.
+  expanded <- map_dfr(seq_len(nrow(tab)), function(i) {
+    devices <- split_list_text(tab$devices[i])
+    tibble(product = devices, PTFE = tab$PTFE[i])
+  })
+
   substance_cols <- c("PTFE")
   col_to_token <- list(PTFE = "PTFE")
-  src_text <- paste0("A.123 row (", product, "): marks = ",
-                      apply(tab[substance_cols], 1, function(r) paste(na.omit(r), collapse = ", ")))
-  melt_matrix(product, substance_cols, tab, col_to_token, "A.123", src_text)
+  src_text <- paste0("A.123 row (", expanded$product, "): marks = ",
+                      apply(expanded[substance_cols], 1, function(r) paste(na.omit(r), collapse = ", ")))
+  melt_matrix(expanded$product, substance_cols, expanded, col_to_token, "A.123", src_text)
 }
 
 add_table(extract_a78())

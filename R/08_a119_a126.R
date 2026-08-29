@@ -2,9 +2,93 @@
 # General use / Sub-use / Specific use hierarchy (General use is only
 # printed on the first row of each block, so it's forward-filled; Sub-use
 # and Specific use are per-row already).
+#
+# Rows 95-135 of the loaded table (source rows covering "Methoxytridecafluoro-
+# heptene isomers" through "1,1,2,3,3,3-Hexafluoropropene, oxidized, polymd.
+# (Perfluoropolyether, PFPE)") are corrupted at the source-extraction level:
+# Code/CAS/General use/Specific use are shifted across columns (e.g. a Code
+# value like "MPHE, SionTM" ends up in the CAS column) and some Specific-use
+# text is dropped entirely, with the substance name itself wrapping into the
+# Code column for a few rows. This is hand-corrected below using the
+# original PDF table images (pp. 441-447) as ground truth, rather than
+# algorithmically un-shifting columns that have already lost content.
+A119_CORRUPTED_SUBSTANCES <- c(
+  "Methoxytridecafluoro-heptene isomers", "Dodecafluoro-2-methyl-3-pentanone",
+  "1,1,2,2-Tetrafluoro-1- (2,2,2-trifluoroethoxy) ethane",
+  "Methyl perfluoropropyl ether",
+  "Methyl nonafluorobutyl ether + Methyl nonafluoroisobutyl ether",
+  "1-Ethoxy-nonafluorobutane"
+)
+
+a119_fix <- tribble(
+  ~substance, ~code, ~cas, ~general_use, ~sub_use, ~specific_use,
+  "Methoxytridecafluoro-heptene isomers", "MPHE, SionTM", "No data",
+    "Solvents", "Precision & electronics cleaning, commercial & industrial cleaning and carrier solvent & lubricants", NA,
+  "Methoxytridecafluoro-heptene isomers", "MPHE, SionTM", "No data",
+    "Other", "Debinding agent, 3D printing", NA,
+  "Dodecafluoro-2-methyl-3-pentanone", "FK-5-1-12", "756-13-8",
+    "Cover gases", "Magnesium casting", NA,
+  "Dodecafluoro-2-methyl-3-pentanone", "FK-5-1-12", "756-13-8",
+    "Fire Suppressant", "Local streaming agent", NA,
+  "1,1,2,2-Tetrafluoro-1-(2,2,2-trifluoroethoxy)ethane", "HFE-347pc-f2", "406-78-0",
+    "Solvents", "Precision & electronics cleaning, commercial & industrial cleaning", NA,
+  "Methyl perfluoropropyl ether", "HFE-7000", "375-03-1",
+    "Solvents", "Carrier solvent & lubricants", NA,
+  "Methyl nonafluorobutyl ether + Methyl nonafluoroisobutyl ether", "HFE-449mccc/HFE-449s1 (HFE-7100)", "163702-08-7, 163702-07-6",
+    "Solvents", "Precision & electronics cleaning, commercial & industrial cleaning and carrier solvent & lubricants", NA,
+  "Methyl nonafluorobutyl ether + Methyl nonafluoroisobutyl ether", "HFE-449mccc/HFE-449s1 (HFE-7100)", "163702-08-7, 163702-07-6",
+    "Other", "Immersion cooling of electronics", NA,
+  "Methyl nonafluorobutyl ether + Methyl nonafluoroisobutyl ether", "HFE-449mccc/HFE-449s1 (HFE-7100)", "163702-08-7, 163702-07-6",
+    "Cover gas", "Magnesium casting", NA,
+  "Methyl nonafluorobutyl ether + Methyl nonafluoroisobutyl ether", "HFE-449mccc/HFE-449s1 (HFE-7100)", "163702-08-7, 163702-07-6",
+    "Solvents", "Cultural heritage paper preservation", NA,
+  "1-Ethoxy-nonafluorobutane", "HFE-569mccc/HFE-569sf2 (HFE-7200)", "163702-05-4",
+    "Solvents", "Precision & electronics cleaning, commercial & industrial cleaning and carrier solvent & lubricants", NA,
+  "1-Ethoxy-nonafluorobutane", "HFE-569mccc/HFE-569sf2 (HFE-7200)", "163702-05-4",
+    "Cover gas", "Magnesium casting", NA,
+  "3-Methoxyperfluoro(2-methylpentane)", "HFE-7300", "132182-92-4",
+    "Solvents", NA, NA,
+  "3-Ethoxyperfluoro(2-methylhexane)", "HFE-7500", "297730-93-9",
+    "Solvents", "Commercial & industrial cleaning", NA,
+  "3-Ethoxyperfluoro(2-methylhexane)", "HFE-7500", "297730-93-9",
+    "Refrigerant", "Electronics cooling, military applications", NA,
+  "Hexafluoroisopropanol", "HFIP", "920-66-1",
+    "Solvents", "3D printing processing liquid", NA,
+  "2,3,3,3-tetrafluoro-2-(trifluoromethyl)-propanenitrile", "C4-FN", "42532-60-5",
+    "Insulating gas", "Electrical switchgear (high voltage)", NA,
+  "1,1,1,3,4,4,4-heptafluoro-3-(trifluoromethyl)-2-butanone", "C5-FK", "756-12-7",
+    "Insulating gas", "Electrical switchgear (medium voltage)", NA,
+  "(E)-1,1,1,2,3,4,4,4-nonafluoro-4-(trifluoromethyl)-2-pentene", "FA-188", "3709-71-5",
+    "Foam-blowing agents", "Polyurethane foam, closed cell", NA,
+  "Perfluorohexane (n- and iso-)", "FC-72/PF-5060", "1064697-81-9",
+    "Solvents", "Heat transfer agent", NA,
+  "Perfluorohexane (n- and iso-)", "FC-72/PF-5060", "1064697-81-9",
+    "Solvents", "Cultural heritage paper preservation", NA,
+  "Perfluorotripropylamine (perfluamine)", "FC-3283", "338-83-0",
+    "Solvents", "Heat transfer agent", NA,
+  "Perfluorotributylamine", "FC-40/FC-3284", "311-89-7 (1064698-37-8)",
+    "Solvents", "Heat transfer agent", NA,
+  "Perfluorotributylamine", "FC-40/FC-3284", "311-89-7 (1064698-37-8)",
+    "Other", "Immersion cooling of electronics", NA,
+  "Perfluoro-N-propyl-morpholine (mixture of isomers)", "FC-770", "1093615-61-2",
+    "Solvents", "Heat transfer agent", NA,
+  "Perfluoro-2-methylpentane", "Flutec RC1", "355-04-4",
+    "Foam-blowing agents", "Rigid closed-cell PU/PIR insulation foam", NA,
+  "1,1,2,3,3,3-Hexafluoropropene, oxidized, polymd. (Perfluoropolyether, PFPE)", "Galden HT-55/HT-70", "69991-67-9",
+    "Other", "Immersion cooling of electronics", NA
+)
+
 extract_a119 <- function() {
   tab <- load_table("A.119")
   names(tab) <- c("substance", "code", "cas", "general_use", "sub_use", "specific_use")
+
+  # drop the corrupted rows (identified by substance name, since row
+  # position also carries the mid-block wrap fragments with substance = NA)
+  idx <- seq_len(nrow(tab))
+  bad_idx <- which(tab$substance %in% A119_CORRUPTED_SUBSTANCES | (idx >= 95 & idx <= 135))
+  tab <- tab[-bad_idx, ]
+  tab <- bind_rows(tab, a119_fix)
+
   tab$general_use <- ffill(tab$general_use)
   product <- apply(tab[c("general_use", "sub_use", "specific_use")], 1, function(r) {
     r <- r[!is.na(r) & str_trim(r) != ""]

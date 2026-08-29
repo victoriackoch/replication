@@ -1,18 +1,22 @@
-# Master script: runs every table's extraction (00-15) and assembles the
-# final long-format product/substance/CAS table.
+# Master script: runs every table's extraction (00-17) and assembles four
+# output tables:
+#   1. pfas_product_substance_table.csv -- the main product/substance/CAS
+#      table (all in-scope tables except A.100, which is standalone)
+#   2. pfas_a100_table.csv -- A.100 standalone (point 1)
+#   3. pfas_polymer_composition_table.csv -- "X; a polymer of: Y" /
+#      "a copolymer of X and Y" entries broken into name + monomers (point 2)
+#   4. pfas_ppa_monomer_listing_table.csv -- rows whose Function/Regulatory
+#      Listing text cites the substance as an EU Reg. 10/2011 PPA/monomer
+#      (points 10-11)
 #
-# Column 1 product        -- named use / application the substance is used in
-# Column 2 substance_name  -- full chemical/polymer name, where given
-# Column 3 abbreviation    -- abbreviation/acronym, where given
-# Column 4 cas_number      -- CAS number, where given
-# Column 5 source          -- table code (A.X) the row was drawn from
-# Column 6 source_text     -- the original cell text the row was extracted from
-#
-# A row needs a product AND at least one of substance_name/abbreviation to
-# be kept -- every extraction function already enforces that on its own
-# table, so this step only assembles and deduplicates.
+# Main-table columns: product, substance_name, substance_synonym,
+# abbreviation, abbreviation_synonym, substance_group, cas_number, source,
+# source_text. A row needs a product AND at least one of substance_name/
+# abbreviation to be kept -- every extraction function already enforces
+# that on its own table, so this step only assembles and deduplicates.
 
 source("R/00_helpers.R")
+source("R/00b_name_parsers.R")
 source("R/01_long_form_tables.R")
 source("R/02_a62_lubricants.R")
 source("R/03_a57_energy.R")
@@ -28,32 +32,60 @@ source("R/12_a21_a25_fcm_packaging.R")
 source("R/13_matrix_tables.R")
 source("R/14_a17_a88_textiles.R")
 source("R/15_concentration_matrices.R")
+source("R/16_a100_standalone.R")
+source("R/17_a125_medical_polymers.R")
 
-# A handful of "Examples of PFAS" cells (roughly a dozen rows out of 1400+)
-# contain a full IUPAC name with a multi-locant stereodescriptor list (e.g.
-# "rel-(3aR,4S,7R,7aS)-3a,4,7,7a-tetrahydro-..."); split_substance_list()'s
-# locant-merge pass recovers most of these but occasionally still leaves a
-# bare orphan locant/stereo-descriptor token ("2", "N", "7R"...) as its own
-# "substance" after a merge chain breaks. These are dropped here as a final
-# safety net -- real substance abbreviations in this domain are never a
-# bare single letter or digits-plus-locant-letter, so this can't remove a
-# genuine entry (spot-checked against the full row set).
+# handful of "Examples of PFAS" cells shred a full IUPAC name with a multi-
+# locant stereodescriptor list; split_substance_list()'s locant-merge pass
+# recovers most, but a bare orphan locant/stereo-descriptor token
+# ("2", "N", "7R"...) can still slip through a broken merge chain -- dropped
+# here as a final safety net (no genuine substance abbreviation in this
+# domain is ever a bare single letter or digits-plus-locant-letter).
 LOCANT_ONLY_RE <- "^[0-9]+[A-Za-z]{0,2}$|^[A-Za-z]$"
 
-final_table <- bind_rows(all_tables) %>%
-  mutate(across(c(product, substance_name, abbreviation, cas_number, source_text), str_squish)) %>%
-  filter(!is.na(product), product != "",
-         !(is.na(substance_name) & is.na(abbreviation)),
-         is.na(substance_name) | !str_detect(substance_name, LOCANT_ONLY_RE)) %>%
-  distinct(product, substance_name, abbreviation, cas_number, source, .keep_all = TRUE) %>%
-  arrange(source, product, substance_name, abbreviation)
+assemble <- function(rows) {
+  rows %>%
+    mutate(across(c(product, substance_name, substance_synonym, abbreviation,
+                     abbreviation_synonym, substance_group, source_text), str_squish)) %>%
+    filter(!is.na(product), product != "",
+           !(is.na(substance_name) & is.na(abbreviation)),
+           is.na(substance_name) | !str_detect(substance_name, LOCANT_ONLY_RE)) %>%
+    distinct(product, substance_name, abbreviation, cas_number, source, .keep_all = TRUE) %>%
+    arrange(source, product, substance_name, abbreviation) %>%
+    select(product, substance_name, substance_synonym, abbreviation, abbreviation_synonym,
+           substance_group, cas_number, source, source_text)
+}
+
+final_table <- assemble(bind_rows(all_tables))
+a100_table <- assemble(A100_TABLE)
+
+polymer_table <- bind_rows(POLYMER_ROWS) %>%
+  mutate(across(c(full_text, substance_name, cas_number, type, monomer), str_squish)) %>%
+  distinct(source, full_text, monomer, .keep_all = TRUE) %>%
+  pivot_wider(id_cols = c(source, full_text, substance_name, cas_number, type),
+              names_from = monomer_n, values_from = monomer, names_prefix = "monomer_") %>%
+  arrange(source, substance_name)
+monomer_cols <- names(polymer_table)[str_starts(names(polymer_table), "monomer_")]
+monomer_cols <- monomer_cols[order(as.integer(str_remove(monomer_cols, "monomer_")))]
+polymer_table <- polymer_table %>% select(source, full_text, substance_name, cas_number, type, all_of(monomer_cols))
+
+ppa_monomer_table <- bind_rows(PPA_MONOMER_ROWS) %>%
+  mutate(across(c(substance_name, abbreviation, cas_number, use, regulatory_listing), str_squish)) %>%
+  distinct(source, substance_name, use, regulatory_listing, .keep_all = TRUE) %>%
+  arrange(source, substance_name)
 
 cat("Tables processed:", length(all_tables), "\n")
-cat("Final row count:", nrow(final_table), "\n")
-cat("Rows per source table:\n")
+cat("Main table rows:", nrow(final_table), "\n")
+cat("A.100 table rows:", nrow(a100_table), "\n")
+cat("Polymer composition table rows:", nrow(polymer_table), "\n")
+cat("PPA/monomer listing table rows:", nrow(ppa_monomer_table), "\n")
+cat("Rows per source table (main):\n")
 print(final_table %>% count(source, sort = TRUE), n = 50)
 
 dir.create("output", showWarnings = FALSE)
 write.csv(final_table, "output/pfas_product_substance_table.csv", row.names = FALSE, na = "")
+write.csv(a100_table, "output/pfas_a100_table.csv", row.names = FALSE, na = "")
+write.csv(polymer_table, "output/pfas_polymer_composition_table.csv", row.names = FALSE, na = "")
+write.csv(ppa_monomer_table, "output/pfas_ppa_monomer_listing_table.csv", row.names = FALSE, na = "")
 saveRDS(final_table, "output/pfas_product_substance_table.rds")
-cat("\nWritten to output/pfas_product_substance_table.csv\n")
+cat("\nWritten to output/*.csv\n")
