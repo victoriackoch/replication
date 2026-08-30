@@ -43,10 +43,48 @@ source("R/17_a125_medical_polymers.R")
 # domain is ever a bare single letter or digits-plus-locant-letter).
 LOCANT_ONLY_RE <- "^[0-9]+[A-Za-z]{0,2}$|^[A-Za-z]$"
 
+# A handful of substance names recur across many source rows in a form
+# that needs more than "capitalize + drop trailing period" to read
+# properly: a bare class word that should read as its established acronym-
+# adjacent name ("elastomers"/"Fluoroelastomer" -> "Fluoroelastomers"), or a
+# bare descriptive fragment that's really shorthand for a specific polymer
+# family ("acrylate" -> "Acrylate-based copolymers"). Matched case-
+# insensitively against the full trimmed name.
+NAME_NORMALIZE_MAP <- c(
+  "elastomers" = "Fluoroelastomers",
+  "fluoroelastomer" = "Fluoroelastomers",
+  "fluoroelastomers" = "Fluoroelastomers",
+  "acrylate" = "Acrylate-based copolymers",
+  "perfluoropolyethers" = "Perfluoropolyethers",
+  "perfluoropolyether" = "Perfluoropolyether"
+)
+
+normalize_substance_name <- function(name) {
+  if (is.na(name)) return(name)
+  trimmed <- str_trim(name)
+  key <- tolower(trimmed)
+  if (key %in% names(NAME_NORMALIZE_MAP)) return(unname(NAME_NORMALIZE_MAP[key]))
+  trimmed <- str_remove(trimmed, "\\.$")
+  if (str_detect(trimmed, "^[a-z]")) {
+    trimmed <- paste0(toupper(str_sub(trimmed, 1, 1)), str_sub(trimmed, 2))
+  }
+  trimmed
+}
+
 assemble <- function(rows) {
   rows %>%
     mutate(across(c(product, substance_name, substance_synonym, abbreviation,
                      abbreviation_synonym, substance_group, source_text), str_squish)) %>%
+    mutate(substance_name = map_chr(substance_name, normalize_substance_name)) %>%
+    # "Perfluoropolyether(s)" is PFPE -- fill the abbreviation in when the
+    # name alone was all the source gave us.
+    mutate(abbreviation = if_else(
+      is.na(abbreviation) & str_detect(coalesce(substance_name, ""), regex("^Perfluoropolyether", ignore_case = TRUE)),
+      "PFPE", abbreviation
+    )) %>%
+    # a bare "pigments" is never itself a named PFAS -- unlike a specific
+    # named pigment (e.g. "Pigment Yellow 154"), it identifies nothing.
+    filter(is.na(substance_name) | tolower(substance_name) != "pigments") %>%
     filter(!is.na(product), product != "",
            !(is.na(substance_name) & is.na(abbreviation)),
            is.na(substance_name) | !str_detect(substance_name, LOCANT_ONLY_RE)) %>%

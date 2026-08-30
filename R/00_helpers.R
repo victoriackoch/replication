@@ -102,11 +102,33 @@ is_acronym_token <- function(x) {
   plain || chain_tagged
 }
 
+
+# Acronyms of the fluoropolymer/fluoroelastomer/refrigerant family that
+# recur throughout this workbook embedded inside an otherwise descriptive
+# phrase rather than standing alone or wrapped in its own parentheses (e.g.
+# "PTFE powder or wax", "PTFE added to polyamid", "High-MW PTFE") -- when a
+# free-text item doesn't cleanly match either "ACRONYM (name)" pattern
+# below but does contain one of these as a whole word, that word is still
+# the substance's abbreviation, just with a qualifier attached to it.
+KNOWN_EMBEDDED_ACRONYMS <- c(
+  "PTFE", "PFPE", "FKM", "FEP", "PVDF", "ETFE", "FFKM", "FEPM", "FVMQ",
+  "PCTFE", "ECTFE", "FEVE", "PFA", "PMVE"
+)
+extract_embedded_acronym <- function(name) {
+  for (a in KNOWN_EMBEDDED_ACRONYMS) {
+    if (str_detect(name, paste0("\\b", a, "\\b"))) return(a)
+  }
+  NA_character_
+}
+
 parse_name_abbrev <- function(token) {
   if (is.na(token)) return(list(name = NA_character_, abbrev = NA_character_))
   token <- str_trim(token)
-  # "ACRONYM (longer descriptive text)"
-  m <- str_match(token, "^([A-Za-z0-9][A-Za-z0-9\\-]{1,9})\\s*\\(([^()]{4,})\\)$")
+  # "ACRONYM (longer descriptive text)" -- the parenthesised text may itself
+  # contain nested parentheses (e.g. "FFKM (Perfluoro(Methyl Vinyl Ether)-
+  # Tetrafluoroethylene Copolymer)"), so this matches from the first "(" to
+  # the LAST ")" in the token rather than excluding "()" from the middle.
+  m <- str_match(token, "^([A-Za-z0-9][A-Za-z0-9\\-]{1,9})\\s*\\((.{4,})\\)$")
   if (!is.na(m[1, 1]) && is_acronym_token(m[1, 2])) {
     return(list(name = str_trim(m[1, 3]), abbrev = m[1, 2]))
   }
@@ -118,7 +140,7 @@ parse_name_abbrev <- function(token) {
   if (is_acronym_token(token)) {
     return(list(name = NA_character_, abbrev = token))
   }
-  list(name = token, abbrev = NA_character_)
+  list(name = token, abbrev = extract_embedded_acronym(token))
 }
 
 # Extract "...name... (CAS: 12345-67-8)" pairs from a free-text cell that
@@ -188,7 +210,7 @@ is_no_info <- function(x) {
 }
 
 CLASS_PREFIX_RE <- regex(
-  "(Polymeric PFAS[s]?\\s*:|Non-polymeric PFAS[s]?\\s*:|Polymeric\\s*:|Non-polymeric\\s*:|Fluorinated gas(es)?\\s*:)",
+  "(Polymeric PFAS[s]?\\s*:|Non[-\\s]polymeric PFAS[s]?\\s*:|Polymeric\\s*:|Non[-\\s]polymeric\\s*:|Fluorinated gas(es)?\\s*:)",
   ignore_case = TRUE
 )
 
@@ -217,7 +239,13 @@ SUBSTANCE_LIST_OVERRIDES <- list(
   # acronym, some start the next one), which no generic rule can tell
   # apart; hand-reconstructed instead.
   "Polymeric PFAS: PTFE, FVMQ (CAS 63148-56-1/ 68037-87-6), PVDF copolymer, PFPE etc. Non-polymeric PFAS: HFP, 1,1,2,2,3,3,4-hepta fluoro cyclopentane, Tetraethylammonium heptadecafluorooctanesulphon ate, Tetraethylazanium nonafluorobutane-1-sulfonate, Propene, 1,3,3,3,-tetrafluoro- ,(E)-, 1,1,1,2- Tetrafluoroethane, 1,1,1,2,2,3,4,5,5,5-decafluoro- 3-methoxy-4- (trifluoromethyl)pentane, 1-ethoxynonafluorobutane etc." =
-    c("PTFE", "FVMQ (CAS 63148-56-1/68037-87-6)", "PVDF copolymer", "PFPE", "HFP",
+    # "FVMQ (CAS 63148-56-1/68037-87-6)" is kept as the bare acronym "FVMQ"
+    # here rather than "FVMQ" with the CAS pair as its "name" (which is what
+    # parse_name_abbrev's "ACRONYM (text)" pattern would otherwise do with
+    # it) -- this table's Examples cells don't carry a per-substance CAS
+    # through to the final cas_number column at all (see split_substance_list),
+    # so leaving the CAS pair attached just produces a CAS-shaped fake name.
+    c("PTFE", "FVMQ", "PVDF copolymer", "PFPE", "HFP",
       "1,1,2,2,3,3,4-heptafluorocyclopentane", "Tetraethylammonium heptadecafluorooctanesulphonate",
       "Tetraethylazanium nonafluorobutane-1-sulfonate", "1,3,3,3-tetrafluoropropene, (E)-",
       "1,1,1,2-Tetrafluoroethane", "1,1,1,2,2,3,4,5,5,5-decafluoro-3-methoxy-4-(trifluoromethyl)pentane",
@@ -247,7 +275,108 @@ SUBSTANCE_LIST_OVERRIDES <- list(
   "Polymeric PFAS: PTFE, PVDF, ECTFE, FEVE, FEP, PFPE Non-polymeric PFAS:Acrylate-and silane/siloxane-based side-chain fluorinated polymers (non-polymeric precursors)" =
     c("PTFE", "PVDF", "ECTFE", "FEVE", "FEP", "PFPE",
       "Acrylate-based side-chain fluorinated polymers (non-polymeric precursors)",
-      "Silane/siloxane-based side-chain fluorinated polymers (non-polymeric precursors)")
+      "Silane/siloxane-based side-chain fluorinated polymers (non-polymeric precursors)"),
+
+  # A.59 "Fluoropolymers and mostly PTFE (90-95%)" -- one substance (PTFE,
+  # with a purity note), not two ("Fluoropolymers" as a separate generic
+  # class plus "PTFE (90-95%)").
+  "Polymeric PFAS: Fluoropolymers and mostly PTFE (90-95%)" = c("PTFE"),
+
+  # A.53 "Plasma [Dry] Etch"/"Chemical vapour deposition chamber"/"DRIE"
+  # rows: PDF subscript extraction detached every chemical-formula
+  # subscript digit from its element letter and appended them, in order,
+  # as bare trailing numbers (sometimes split further across the visual
+  # column layout) -- e.g. "PFC-318 (C F), PFC-14 4 8 (CF), C F , C F ,
+  # C F . 4 2 6 3 8 5 8" is "PFC-318 (C4F8), PFC-14 (CF4), C2F6, C3F8,
+  # C5F8" with all 9 subscript digits stripped out and moved to the end
+  # (in the same left-to-right order they belong in). Reassembled here
+  # using each formula's own well-known identity (these are all standard
+  # semiconductor-fab PFC/HFC process gases) as cross-check.
+  "Fluorinated gases: PFC, HFC and HFO gases e.g. HFC-23, HFC-134a, PFC-318 (C F), PFC-14 4 8 (CF), C F , C F , C F . 4 2 6 3 8 5 8" =
+    c("HFC-23", "HFC-134a", "PFC-318 (C4F8)", "PFC-14 (CF4)", "C2F6", "C3F8", "C5F8"),
+  "Fluorinated gases: PFC, HFC and HFO gases e.g. CF , 4 C F , C F , C F , C F , CHF , CH F 2 6 3 8 4 8 5 8 3 3" =
+    c("CF4", "C2F6", "C3F8", "C4F8", "C5F8", "CHF3", "CH3F"),
+  "Fluorinated gases: CF , C F , C F 4 3 8 4 8" = c("CF4", "C3F8", "C4F8"),
+
+  # A.53 "Thermal Testing"/"Advanced semiconductor packaging" heat-transfer
+  # rows: "PFPMIE and other fully fluorinated liquids (perfluorinated
+  # amines and perfluoroalkylmorpholines, Reaction mass of X and Y" names
+  # PFPMIE, then introduces a descriptive class ("other fully fluorinated
+  # liquids... amines and morpholines") whose one given example is a
+  # single reaction-mass mixture of two named amines -- kept as one
+  # substance, not shredded on the "and" inside its own name -- plus
+  # "Hydrofluoroethers" as a separate closing item (the source's
+  # unbalanced "(" is never closed, an extraction artifact, not content).
+  "Polymeric PFAS: perfluoropolyethers Non-polymeric PFAS: PFPMIE and other fully fluorinated liquids (perfluorinated amines and perfluoroalkylmorpholines, Reaction mass of 1,1,2,2,3,3,4,4,4-nonafluoro- N,N-bis(nonafluorobutyl)butan-1-amine and 1,1,2,2,3,3,4,4,4-nonafluoro-N-[1,1,2,3,3-hexafluoro-2- (trifluoromethyl)propyl]-N- (1,1,2,2,3,3,4,4,4-nonafluorobutyl)butan-1-amine Fluorinated gases: Hydrofluoroethers" =
+    c("Perfluoropolyethers", "PFPMIE",
+      "Reaction mass of 1,1,2,2,3,3,4,4,4-nonafluoro-N,N-bis(nonafluorobutyl)butan-1-amine and 1,1,2,2,3,3,4,4,4-nonafluoro-N-[1,1,2,3,3-hexafluoro-2-(trifluoromethyl)propyl]-N-(1,1,2,2,3,3,4,4,4-nonafluorobutyl)butan-1-amine",
+      "Hydrofluoroethers"),
+
+  # A.53 Photolithography "Dielectric fluorinated polymers (PBO/PI)" rows:
+  # a simple comma list (3 short items) followed by one long IUPAC name
+  # built as "A polymer with B and C" containing its own internal commas
+  # (a stereodescriptor list) and an "and" that is part of the compound
+  # name, not a list separator -- kept as one item.
+  "Non-polymeric PFAS: Side-chain fluorinated polymers (Water-insoluble C1 PFAS polymers), Bisphenol AF, fluorinated polyimide, 4,4'-Oxybisbenzoic acid polymer with rel-(3aR,4S,7R,7aS)-3a,4,7,7a-tetrahydro-4,7-methanoisobenzofuran-1,3-dione and 4,4'-[2,2,2-trifluoro-1- (trifluoromethyl)ethylidene]bis[2-aminophenol]" =
+    c("Side-chain fluorinated polymers (Water-insoluble C1 PFAS polymers)", "Bisphenol AF", "Fluorinated polyimide",
+      "4,4'-Oxybisbenzoic acid polymer with rel-(3aR,4S,7R,7aS)-3a,4,7,7a-tetrahydro-4,7-methanoisobenzofuran-1,3-dione and 4,4'-[2,2,2-trifluoro-1-(trifluoromethyl)ethylidene]bis[2-aminophenol]"),
+  # same row repeated later in the sheet (row 51), missing the "fluorinated
+  # polyimide" item -- the source cell itself is cut off mid-word at
+  # "...(3aR,4S,7R,7aS)-" and continues on the next physical row (52, with
+  # no Sub-use of its own), which merge_orphan_examples_rows() reattaches
+  # with a literal space, so this is what split_substance_list actually
+  # receives (note the space after the dash, unlike row 11's version).
+  "Non-polymeric PFAS: Side-chain fluorinated polymers (Water-insoluble C1 PFAS polymers), Bisphenol AF, 4,4'-Oxybisbenzoic acid polymer with rel-(3aR,4S,7R,7aS)- 3a,4,7,7a-tetrahydro-4,7-methanoisobenzofuran-1,3-dione and 4,4'-[2,2,2-trifluoro-1- (trifluoromethyl)ethylidene]bis[2-aminophenol]" =
+    c("Side-chain fluorinated polymers (Water-insoluble C1 PFAS polymers)", "Bisphenol AF",
+      "4,4'-Oxybisbenzoic acid polymer with rel-(3aR,4S,7R,7aS)-3a,4,7,7a-tetrahydro-4,7-methanoisobenzofuran-1,3-dione and 4,4'-[2,2,2-trifluoro-1-(trifluoromethyl)ethylidene]bis[2-aminophenol]"),
+
+  # A.53 Advanced Semiconductor Packaging "Flux": "Likely non-polymeric
+  # PFAS: Surfactants" -- "Likely" isn't matched by CLASS_PREFIX_RE (it
+  # only recognises the class label starting the segment), so the whole
+  # phrase would otherwise survive as one ungainly item.
+  "Likely non-polymeric PFAS: Surfactants" = c("Non-polymeric surfactants"),
+
+  # A.51 "Liquid crystal displays (LCD) - Inter layer": "Non-polymeric
+  # PFASs, PFHxA, fluorinated polyimide." has no colon after "PFASs" (the
+  # form CLASS_PREFIX_RE requires), so "Non-polymeric PFASs" itself would
+  # otherwise survive as a bogus first list item instead of being read as
+  # the (colon-less) class label.
+  "Non-polymeric PFASs, PFHxA, fluorinated polyimide." = c("PFHxA", "fluorinated polyimide"),
+
+  # A.51 "Piezzoelectric devices": "PVDF and co-polymers, PFPE e.g. CAS no.
+  # 69991-67-9" -- the "e.g." here isn't introducing named examples of PFPE
+  # (there's nothing after the CAS clause once it's stripped), it's just
+  # supplementary info about PFPE itself; the general "such as"/"e.g."
+  # class-name-drop rule would otherwise discard "PFPE" along with it.
+  "Polymeric PFAS: PVDF and co-polymers, PFPE e.g. CAS no. 69991-67-9" = c("PVDF and co-polymers", "PFPE"),
+
+  # A.51 "Plastic additives: Anti-drip agent / flame retardant additive in
+  # plastics": one copolymer IUPAC name built as "A, B, polymer with C and
+  # D" (own internal commas/locants) followed by two distinct sulfonate
+  # substances (the potassium salt and its parent acid) run together with
+  # no delimiter between the salt's own unclosed name and "PFBS".
+  "Polymeric PFAS: PTFE, 1-Propene, 1,1,2,3,3,3-hexafluoro-, polymer with 1,1-difluoroethene and tetrafluoroethene Non-polymeric PFAS: K-PFBS (Potassium 1,1,2,2,3,3,4,4,4-nonafluorobutane-1-sulphonate, PFBS" =
+    c("PTFE", "1-Propene, 1,1,2,3,3,3-hexafluoro-, polymer with 1,1-difluoroethene and tetrafluoroethene",
+      "K-PFBS (Potassium 1,1,2,2,3,3,4,4,4-nonafluorobutane-1-sulphonate)", "PFBS"),
+
+  # A.51 "transfer fluid: immersion cooling" -- a long run of full IUPAC
+  # names, each individually shot through with its own internal locant
+  # commas and mid-word line-wraps ("tetrahyd rofuran", "butan- 1-amine"),
+  # immediately followed by a run of "TradeName; CAS No. X" pairs and
+  # closed off by one more name with a trailing "(CAS number X)" -- far too
+  # irregular (multiple distinct compounds each individually shredded by
+  # the same locant-comma ambiguity split_substance_list can't resolve
+  # between separate names) for the generic splitter; hand-split instead.
+  "Fluorinated gases: HFO and HFE. HFO e.g. (Z)-1,1,1,4,4,4-Hexafluoro-2-buten, HFE e.g. Butane, 1-ethoxy-1,1,2,2,3,3,4,4,4-nonafluoro-, 2,3,3,4,4-pentafluoro-5-methoxy-2,5-bis[1,2,2,2-tetrafluoro-1- (trifluoromethyl)ethyl]tetrahyd rofuran, 1,1,1,2,2,4,5,5,5-nonafluoro- 4-(trifluoromethyl)-3-pentanone, 2-(Trifluoromethyl)-3-ethoxydodecafluorohexane, HFE-7100; CAS No. 163702-08-7, HFE-7200; CAS No. 163702-05-4, HFE-7300; CAS No. 132182-92-4, HFE-7500; CAS No. 297730-93-9, HFE- 356mec; CAS No. 382-34-3 Non-polymeric PFAS: Perfluamine, Reaction mass of 1,1,2,2,3,3,4,4,4-nonafluoro- N,N-bis(nonafluorobutyl)butan- 1-amine and 1,1,2,2,3,3,4,4,4-nonafluoro-N-[1,1,2,3,3-hexafluoro-2- (trifluoromethyl)propyl]-N- (1,1,2,2,3,3,4,4,4-nonafluorobutyl)butan-1-amine, nonafluoro-2-trifluoromethyl-3-pentanone (CAS number 756-13-8)" =
+    c("(Z)-1,1,1,4,4,4-Hexafluoro-2-butene",
+      "Butane, 1-ethoxy-1,1,2,2,3,3,4,4,4-nonafluoro-",
+      "2,3,3,4,4-pentafluoro-5-methoxy-2,5-bis[1,2,2,2-tetrafluoro-1-(trifluoromethyl)ethyl]tetrahydrofuran",
+      "1,1,1,2,2,4,5,5,5-nonafluoro-4-(trifluoromethyl)-3-pentanone",
+      "2-(Trifluoromethyl)-3-ethoxydodecafluorohexane",
+      "HFE-7100", "HFE-7200", "HFE-7300", "HFE-7500", "HFE-356mec",
+      "Perfluamine",
+      "Reaction mass of 1,1,2,2,3,3,4,4,4-nonafluoro-N,N-bis(nonafluorobutyl)butan-1-amine and 1,1,2,2,3,3,4,4,4-nonafluoro-N-[1,1,2,3,3-hexafluoro-2-(trifluoromethyl)propyl]-N-(1,1,2,2,3,3,4,4,4-nonafluorobutyl)butan-1-amine",
+      "Nonafluoro-2-trifluoromethyl-3-pentanone")
 )
 
 # Replaces the LAST " and " in text with a comma (English list convention:
@@ -266,11 +395,35 @@ split_substance_list <- function(text) {
     if (str_trim(text) == key) return(SUBSTANCE_LIST_OVERRIDES[[key]])
   }
   cleaned <- str_remove_all(text, CONFIDENTIAL_RE)
-  # "such as X, Y" / "e.g. X, Y" introduces a list of specific examples of
-  # the class named just before it -- split there too, same as a class
-  # prefix, so "Fluoroelastomers such as FKM, FEPM" yields both
-  # "Fluoroelastomers" and its named examples as separate items.
-  cleaned <- str_replace_all(cleaned, regex("\\bsuch as\\b|\\be\\.g\\.,?", ignore_case = TRUE), ";")
+  # a handful of known PDF-extraction typos/artifacts, fixed by literal
+  # substring replacement rather than a general rule (too narrow to
+  # generalize safely): a stray space splitting "PFPE" in two, and a
+  # footnote-reference number ("72") fused onto a real compound code
+  # ("HCFO-1233zd72") with no delimiter of its own.
+  cleaned <- str_replace_all(cleaned, "\\bP FPE\\b", "PFPE")
+  cleaned <- str_replace_all(cleaned, fixed("HCFO-1233zd72"), "HCFO-1233zd")
+  # this table's Examples cells never carry a genuine per-substance CAS
+  # number through to the final table (see file header), so a CAS clause
+  # embedded in the list text -- "Name; CAS No. 123-45-6" or "Name (CAS
+  # number 123-45-6)" -- is dropped here rather than left to become a
+  # meaningless standalone "substance" of its own once split on the comma/
+  # semicolon that (mis)delimits it from its neighbours.
+  cleaned <- str_remove_all(cleaned, regex(
+    "[;,]?\\s*\\(?CAS\\.?\\s*(No\\.?|number)?\\s*:?\\s*[0-9]{2,7}-[0-9]{2}-[0-9]\\)?",
+    ignore_case = TRUE
+  ))
+  # "<class name> such as X, Y" / "<class name> e.g. X, Y" names specific
+  # members of a class just before introducing them -- once the specific
+  # members are listed, the generic class name is redundant and is dropped
+  # entirely (along with the "such as"/"e.g." connector itself), leaving
+  # just the named members to split out on their own, e.g. "Fluoroelastomers
+  # such as FKM, FEPM, FFKM and FVMQ" yields FKM/FEPM/FFKM/FVMQ, not also a
+  # bare "Fluoroelastomers" line.
+  cleaned <- str_replace_all(
+    cleaned,
+    regex("\\b(\\w[\\w'/-]*(\\s+\\w[\\w'/-]*){0,3})\\s+(such as|e\\.g\\.,?)\\s*", ignore_case = TRUE),
+    ""
+  )
   # replace (rather than delete) each class prefix with a delimiter, so the
   # boundary between class-tagged segments also becomes a split point
   cleaned <- str_replace_all(cleaned, CLASS_PREFIX_RE, ";")
@@ -286,8 +439,12 @@ split_substance_list <- function(text) {
     # gets split apart by the ";" (e.g. "Lithium Bis(trifluoromethanesulfonyl)
     # imide; LITFSI") -- if this WHOLE segment is nothing but a bare
     # acronym, it's that abbreviation, not a new list item; fold it back
-    # into the preceding segment as "Name (ABBR)".
-    if (i > 1 && keep[i - 1] && is_acronym_token(segments[i])) {
+    # into the preceding segment as "Name (ABBR)". But only when the
+    # preceding segment is itself a single name (no internal comma) -- a
+    # multi-item comma list ("PTFE, ETFE, FEP, PVDF") followed by a lone
+    # acronym segment ("PBSF") means the acronym is the next class's own
+    # (single-item) list, not an abbreviation of the list's last member.
+    if (i > 1 && keep[i - 1] && is_acronym_token(segments[i]) && !str_detect(segments[i - 1], ",")) {
       segments[i - 1] <- paste0(segments[i - 1], " (", segments[i], ")")
       keep[i] <- FALSE
     }
@@ -320,6 +477,11 @@ split_substance_list <- function(text) {
     }
   }
   parts <- parts[keep2]
+  # the "such as"/"e.g." class-name deletion above can leave a stray
+  # sentence-terminator (a period, from "...HFE. HFO e.g. X") stuck to the
+  # front of the following item once split; trim it off.
+  parts <- str_trim(str_remove(parts, "^[.,;:]+\\s*"))
+  parts <- parts[parts != ""]
   unique(parts)
 }
 

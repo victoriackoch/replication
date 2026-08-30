@@ -10,7 +10,11 @@
 # row). None of these give a CAS number per substance. Trailing footnote-
 # reference numbers ("Machinery93") are stripped from Use/Sub-use text.
 
-strip_footnote_number <- function(x) str_remove(x, "(?<=[A-Za-z\\)])[0-9]{2,3}$")
+strip_footnote_number <- function(x) {
+  x <- str_remove(x, "(?<=[A-Za-z\\)])[0-9]{2,3}$")
+  # a PDF line-wrap split "panels" across two lines as "pan els"
+  str_replace_all(x, "pan els", "panels")
+}
 
 # Splits Use and Sub-use on commas into atomic items and returns every
 # "Use item: Sub-use item" combination (points 17-19).
