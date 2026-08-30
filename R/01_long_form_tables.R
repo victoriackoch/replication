@@ -17,6 +17,10 @@ strip_footnote_number <- function(x) str_remove(x, "(?<=[A-Za-z\\)])[0-9]{2,3}$"
 cross_product_products <- function(use, subuse) {
   use_items <- if (is.na(use)) NA_character_ else split_respecting_parens(use)
   subuse_items <- if (is.na(subuse)) NA_character_ else split_respecting_parens(subuse)
+  use_items <- use_items[is.na(use_items) | !vapply(use_items, is_no_info, logical(1))]
+  subuse_items <- subuse_items[is.na(subuse_items) | !vapply(subuse_items, is_no_info, logical(1))]
+  if (length(use_items) == 0) use_items <- NA_character_
+  if (length(subuse_items) == 0) subuse_items <- NA_character_
   combos <- expand_grid(u = use_items, s = subuse_items)
   products <- apply(combos, 1, function(r) {
     parts <- r[!is.na(r) & str_trim(r) != ""]
@@ -38,6 +42,28 @@ merge_paren_wraps <- function(tab, col, guard_col) {
       tab[[col]][w] <- paste0(x[w], tab[[col]][w + 1])
       tab <- tab[-(w + 1), ]
       x <- tab[[col]]
+    }
+  }
+  tab
+}
+
+# A cell's Examples text is itself sometimes wrapped onto its own physical
+# row -- the ONLY populated cell on that row -- when the preceding row's
+# Examples cell got cut short. Every genuine data row has a Sub-use of its
+# own; a row with no Use, no Sub-use, but a real Examples value is that
+# kind of continuation (e.g. "Connectors" row's Examples cut off mid-list,
+# continuing on the next row as a bare Examples fragment with nothing
+# else). Left unmerged, that fragment doesn't just lose its connection to
+# the truncated list it completes -- it stands alone with the block's
+# forward-filled Use as its only context and generates spurious rows of
+# its own from whatever names happen to be in it.
+merge_orphan_examples_rows <- function(tab, use_col, subuse_col, examples_col) {
+  is_orphan <- is.na(tab[[use_col]]) & is.na(tab[[subuse_col]]) & !is.na(tab[[examples_col]])
+  idx <- which(is_orphan)
+  for (i in rev(idx)) {
+    if (i > 1) {
+      tab[[examples_col]][i - 1] <- paste0(coalesce(tab[[examples_col]][i - 1], ""), " ", tab[[examples_col]][i])
+      tab <- tab[-i, ]
     }
   }
   tab
@@ -83,6 +109,7 @@ drop_stray_footnote_rows <- function(tab, use_col, subuse_col = NULL, examples_c
 
 extract_long_form <- function(sheet, use_col, subuse_col, examples_col, ffill_use = TRUE) {
   tab <- load_table(sheet)
+  if (!is.null(subuse_col)) tab <- merge_orphan_examples_rows(tab, use_col, subuse_col, examples_col)
   if (!is.null(subuse_col)) tab <- merge_paren_wraps(tab, subuse_col, examples_col)
   tab <- merge_paren_wraps(tab, use_col, examples_col)
   tab <- drop_stray_footnote_rows(tab, use_col, subuse_col, examples_col)

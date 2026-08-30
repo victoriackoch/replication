@@ -34,13 +34,21 @@ a119_fix <- tribble(
     "Solvents", "Precision & electronics cleaning, commercial & industrial cleaning", NA,
   "Methyl perfluoropropyl ether", "HFE-7000", "375-03-1",
     "Solvents", "Carrier solvent & lubricants", NA,
-  "Methyl nonafluorobutyl ether + Methyl nonafluoroisobutyl ether", "HFE-449mccc/HFE-449s1 (HFE-7100)", "163702-08-7, 163702-07-6",
+  "Methyl nonafluorobutyl ether", "HFE-449mccc (HFE-7100 blend)", "163702-08-7",
     "Solvents", "Precision & electronics cleaning, commercial & industrial cleaning and carrier solvent & lubricants", NA,
-  "Methyl nonafluorobutyl ether + Methyl nonafluoroisobutyl ether", "HFE-449mccc/HFE-449s1 (HFE-7100)", "163702-08-7, 163702-07-6",
+  "Methyl nonafluoroisobutyl ether", "HFE-449s1 (HFE-7100 blend)", "163702-07-6",
+    "Solvents", "Precision & electronics cleaning, commercial & industrial cleaning and carrier solvent & lubricants", NA,
+  "Methyl nonafluorobutyl ether", "HFE-449mccc (HFE-7100 blend)", "163702-08-7",
     "Other", "Immersion cooling of electronics", NA,
-  "Methyl nonafluorobutyl ether + Methyl nonafluoroisobutyl ether", "HFE-449mccc/HFE-449s1 (HFE-7100)", "163702-08-7, 163702-07-6",
+  "Methyl nonafluoroisobutyl ether", "HFE-449s1 (HFE-7100 blend)", "163702-07-6",
+    "Other", "Immersion cooling of electronics", NA,
+  "Methyl nonafluorobutyl ether", "HFE-449mccc (HFE-7100 blend)", "163702-08-7",
     "Cover gas", "Magnesium casting", NA,
-  "Methyl nonafluorobutyl ether + Methyl nonafluoroisobutyl ether", "HFE-449mccc/HFE-449s1 (HFE-7100)", "163702-08-7, 163702-07-6",
+  "Methyl nonafluoroisobutyl ether", "HFE-449s1 (HFE-7100 blend)", "163702-07-6",
+    "Cover gas", "Magnesium casting", NA,
+  "Methyl nonafluorobutyl ether", "HFE-449mccc (HFE-7100 blend)", "163702-08-7",
+    "Solvents", "Cultural heritage paper preservation", NA,
+  "Methyl nonafluoroisobutyl ether", "HFE-449s1 (HFE-7100 blend)", "163702-07-6",
     "Solvents", "Cultural heritage paper preservation", NA,
   "1-Ethoxy-nonafluorobutane", "HFE-569mccc/HFE-569sf2 (HFE-7200)", "163702-05-4",
     "Solvents", "Precision & electronics cleaning, commercial & industrial cleaning and carrier solvent & lubricants", NA,
@@ -101,6 +109,31 @@ extract_a119 <- function() {
       if (w < nrow(tab) && is.na(tab$general_use[w + 1]) && is.na(tab$sub_use[w + 1])) {
         tab$substance[w] <- paste0(tab$substance[w], tab$substance[w + 1])
         tab <- tab[-(w + 1), ]
+      }
+    }
+  }
+
+  # PDF line-wrap, general case: every real row in this table has both a
+  # Code and a CAS number; a row with BOTH blank (but a non-blank
+  # Substance) is pure wrap-continuation text, with fragments of the
+  # substance name, general-use, AND specific-use each landing in their
+  # own column on this row (e.g. row "HFC Blend" / code=R-507A / gen=
+  # "Refrigeration" / specific="Large-scale food storage" continues on
+  # the next row as substance="(HFC-125/143a)", gen="and heat pumps",
+  # specific="and processing", with no code/cas of its own) -- merge every
+  # fragment back into the row above rather than emit it as if it named
+  # its own substance.
+  no_code_cas <- is.na(tab$code) & is.na(tab$cas) & !is.na(tab$substance)
+  frag_idx <- which(no_code_cas)
+  if (length(frag_idx) > 0) {
+    for (w in rev(frag_idx)) {
+      if (w > 1) {
+        for (col in c("substance", "general_use", "sub_use", "specific_use")) {
+          if (!is.na(tab[[col]][w])) {
+            tab[[col]][w - 1] <- paste(coalesce(tab[[col]][w - 1], ""), tab[[col]][w])
+          }
+        }
+        tab <- tab[-w, ]
       }
     }
   }

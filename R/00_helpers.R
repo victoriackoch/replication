@@ -177,7 +177,7 @@ make_row_raw <- function(product, raw_substance, cas_number = NA_character_,
 
 # Cell values that mean "nothing named here" -- should never become a row.
 NO_INFO_RE <- regex(
-  "^(no information( received)?\\.?|no data\\.?|data unavailable\\.?|not applicable\\.?|n/?a\\.?|unknown\\.?)$",
+  "^(no information( received)?\\.?|no data\\.?|data unavailable\\.?|not applicable\\.?|n/?a\\.?|unknown\\.?|-+)$",
   ignore_case = TRUE
 )
 
@@ -210,38 +210,94 @@ CONFIDENTIAL_RE <- regex(
 # splitter can recover. Overridden by exact text match rather than parsed.
 SUBSTANCE_LIST_OVERRIDES <- list(
   "Polymeric PFAS: Fluoroelastomer, PVDF, PFA, PTFE Copolymers for PVDF: VDF, TrFE, TFE, CTFE, HFP Non-polymeric: LiTFSI, LiTFS" =
-    c("Fluoroelastomer", "PVDF", "PFA", "PTFE", "VDF", "TrFE", "TFE", "CTFE", "HFP", "LiTFSI", "LiTFS")
+    c("Fluoroelastomer", "PVDF", "PFA", "PTFE", "VDF", "TrFE", "TFE", "CTFE", "HFP", "LiTFSI", "LiTFS"),
+  # A.51 "Wires and cables: Connectors" -- a run of bare locant digits
+  # ("1,1,2,2,3,3,4-...") genuinely belongs to different neighbouring
+  # compound names depending on position (some extend the preceding
+  # acronym, some start the next one), which no generic rule can tell
+  # apart; hand-reconstructed instead.
+  "Polymeric PFAS: PTFE, FVMQ (CAS 63148-56-1/ 68037-87-6), PVDF copolymer, PFPE etc. Non-polymeric PFAS: HFP, 1,1,2,2,3,3,4-hepta fluoro cyclopentane, Tetraethylammonium heptadecafluorooctanesulphon ate, Tetraethylazanium nonafluorobutane-1-sulfonate, Propene, 1,3,3,3,-tetrafluoro- ,(E)-, 1,1,1,2- Tetrafluoroethane, 1,1,1,2,2,3,4,5,5,5-decafluoro- 3-methoxy-4- (trifluoromethyl)pentane, 1-ethoxynonafluorobutane etc." =
+    c("PTFE", "FVMQ (CAS 63148-56-1/68037-87-6)", "PVDF copolymer", "PFPE", "HFP",
+      "1,1,2,2,3,3,4-heptafluorocyclopentane", "Tetraethylammonium heptadecafluorooctanesulphonate",
+      "Tetraethylazanium nonafluorobutane-1-sulfonate", "1,3,3,3-tetrafluoropropene, (E)-",
+      "1,1,1,2-Tetrafluoroethane", "1,1,1,2,2,3,4,5,5,5-decafluoro-3-methoxy-4-(trifluoromethyl)pentane",
+      "1-ethoxynonafluorobutane"),
+  # A.59 (construction) reuses an "X-, Y- and Z-based side-chain
+  # fluorinated polymers" shared-suffix construction across several rows,
+  # each with a different subset/ordering/typo -- same shape as point 9's
+  # locant-prefix pattern but for adjectival prefixes, which the generic
+  # splitter can't safely separate from an unrelated preceding item
+  # ("Fluorosurfactant and acrylate-..." -- "Fluorosurfactant" is its own
+  # substance, not one of the "-based" prefixes).
+  "Polymeric PFAS: PTFE Non-polymeric PFAS: Fluorosurfactant and acrylate-, urethane-and siloxane-based side-chain fluorinated polymers (non-polymeric Precursors)" =
+    c("PTFE", "Fluorosurfactant", "Acrylate-based side-chain fluorinated polymers (non-polymeric Precursors)",
+      "Urethane-based side-chain fluorinated polymers (non-polymeric Precursors)",
+      "Siloxane-based side-chain fluorinated polymers (non-polymeric Precursors)"),
+  "Non-polymeric PFAS: Fluorosurfactants and acrylate-, urethane-and siloxane-based side-chain fluorinated polymers (non-polymeric precursors)" =
+    c("Fluorosurfactants", "Acrylate-based side-chain fluorinated polymers (non-polymeric precursors)",
+      "Urethane-based side-chain fluorinated polymers (non-polymeric precursors)",
+      "Siloxane-based side-chain fluorinated polymers (non-polymeric precursors)"),
+  "Polymeric PFAS: PTFE powder or wax. Non-polymeric PFAS: Acrylate-, urethane-and silane/siloxane based side-chain fluorinated polymers (non-polymeric precursors)" =
+    c("PTFE powder or wax", "Acrylate-based side-chain fluorinated polymers (non-polymeric precursors)",
+      "Urethane-based side-chain fluorinated polymers (non-polymeric precursors)",
+      "Silane/siloxane-based side-chain fluorinated polymers (non-polymeric precursors)"),
+  "Polymeric PFAS: PTFE Non-polymeric PFAS: Fluorosurfactant and acrylate-and urethane -based side-chain fluorinated polymers" =
+    c("PTFE", "Fluorosurfactant", "Acrylate-based side-chain fluorinated polymers",
+      "Urethane-based side-chain fluorinated polymers"),
+  "Polymeric PFAS: PTFE, PVDF, ECTFE, FEVE, FEP, PFPE Non-polymeric PFAS:Acrylate-and silane/siloxane-based side-chain fluorinated polymers (non-polymeric precursors)" =
+    c("PTFE", "PVDF", "ECTFE", "FEVE", "FEP", "PFPE",
+      "Acrylate-based side-chain fluorinated polymers (non-polymeric precursors)",
+      "Silane/siloxane-based side-chain fluorinated polymers (non-polymeric precursors)")
 )
+
+# Replaces the LAST " and " in text with a comma (English list convention:
+# "A, B, C and D"), so the final item splits out like the others. Skipped
+# if there's no " and " to replace.
+replace_last_and <- function(text) {
+  positions <- str_locate_all(text, regex("\\band\\b", ignore_case = TRUE))[[1]]
+  if (nrow(positions) == 0) return(text)
+  last <- positions[nrow(positions), ]
+  paste0(str_sub(text, 1, last[1] - 1), ",", str_sub(text, last[2] + 1))
+}
 
 split_substance_list <- function(text) {
   if (is_no_info(text)) return(character(0))
   for (key in names(SUBSTANCE_LIST_OVERRIDES)) {
     if (str_trim(text) == key) return(SUBSTANCE_LIST_OVERRIDES[[key]])
   }
+  cleaned <- str_remove_all(text, CONFIDENTIAL_RE)
+  # "such as X, Y" / "e.g. X, Y" introduces a list of specific examples of
+  # the class named just before it -- split there too, same as a class
+  # prefix, so "Fluoroelastomers such as FKM, FEPM" yields both
+  # "Fluoroelastomers" and its named examples as separate items.
+  cleaned <- str_replace_all(cleaned, regex("\\bsuch as\\b|\\be\\.g\\.,?", ignore_case = TRUE), ";")
   # replace (rather than delete) each class prefix with a delimiter, so the
   # boundary between class-tagged segments also becomes a split point
-  cleaned <- str_replace_all(text, CLASS_PREFIX_RE, ";")
-  cleaned <- str_remove_all(cleaned, CONFIDENTIAL_RE)
-  parts <- split_respecting_parens(cleaned)
-  parts <- parts[parts != "" & !vapply(parts, is_no_info, logical(1))]
-  # Occasionally a "Full descriptive name; ABBREV" pair for one substance
-  # gets split apart by the ";" above (e.g. "Lithium Bis
-  # (trifluoromethanesulfonyl)imide; LITFSI"). Re-merge a bare acronym
-  # token into the preceding chunk so parse_name_abbrev() can recover it as
-  # one name+abbreviation pair instead of two fragments -- but only when
-  # the preceding chunk is a multi-word full name (contains a space), not
-  # a short single-word class label like "Fluoroelastomer" or "PTFE",
-  # which is legitimately its own separate list item (e.g. "Fluoroelastomer,
-  # PVDF, PFA, PTFE" is four distinct substances, not one name+abbreviation).
-  keep <- rep(TRUE, length(parts))
-  for (i in seq_along(parts)) {
-    if (i > 1 && keep[i - 1] && is_acronym_token(parts[i]) &&
-        !is_acronym_token(parts[i - 1]) && str_detect(parts[i - 1], "\\s")) {
-      parts[i - 1] <- paste0(parts[i - 1], " (", parts[i], ")")
+  cleaned <- str_replace_all(cleaned, CLASS_PREFIX_RE, ";")
+
+  # Split on ";" first (top level, parens-respecting) -- this is the ONLY
+  # boundary a bare-acronym segment gets re-merged across (see below), so a
+  # comma-separated list like "Fluoroelastomer, PVDF, PFA, PTFE" is never
+  # affected by that merge (only semicolon-adjacent segments are).
+  segments <- split_respecting_parens(cleaned, delims = ";")
+  keep <- rep(TRUE, length(segments))
+  for (i in seq_along(segments)) {
+    # Occasionally a "Full descriptive name; ABBREV" pair for one substance
+    # gets split apart by the ";" (e.g. "Lithium Bis(trifluoromethanesulfonyl)
+    # imide; LITFSI") -- if this WHOLE segment is nothing but a bare
+    # acronym, it's that abbreviation, not a new list item; fold it back
+    # into the preceding segment as "Name (ABBR)".
+    if (i > 1 && keep[i - 1] && is_acronym_token(segments[i])) {
+      segments[i - 1] <- paste0(segments[i - 1], " (", segments[i], ")")
       keep[i] <- FALSE
     }
   }
-  parts <- parts[keep]
+  segments <- segments[keep]
+
+  # within each segment, replace a trailing " and " with a comma, then
+  # split on commas (parens-respecting) to get the individual items
+  parts <- unlist(lapply(segments, function(seg) split_respecting_parens(replace_last_and(seg), delims = ",")))
+  parts <- parts[parts != "" & !vapply(parts, is_no_info, logical(1))]
   # A complex IUPAC name with a stereodescriptor list, e.g.
   # "rel-(3aR,4S,7R,7aS)-3a,4,7,7a-tetrahydro-...", commonly appears among
   # these acronym lists and gets shredded by the "," split above into bare
@@ -252,10 +308,15 @@ split_substance_list <- function(text) {
   # "substances") rather than the acronym/name list next to them.
   locant_re <- regex("^\\(?[0-9]+[A-Za-z']{0,3}\\)?-?$|^[A-Za-z]$")
   keep2 <- rep(TRUE, length(parts))
+  anchor <- 1
   for (i in seq_along(parts)) {
-    if (i > 1 && keep2[i - 1] && str_detect(parts[i], locant_re)) {
-      parts[i - 1] <- paste0(parts[i - 1], ",", parts[i])
+    if (i > 1 && str_detect(parts[i], locant_re)) {
+      # keep growing the same anchor across a whole RUN of locant
+      # fragments ("1,1,2,2,3,3,4-heptafluoro-..."), not just the first one
+      parts[anchor] <- paste0(parts[anchor], ",", parts[i])
       keep2[i] <- FALSE
+    } else {
+      anchor <- i
     }
   }
   parts <- parts[keep2]
