@@ -89,6 +89,22 @@ extract_a119 <- function() {
   tab <- tab[-bad_idx, ]
   tab <- bind_rows(tab, a119_fix)
 
+  # PDF line-wrap: a substance name with an unclosed "(" (e.g. "HFC/HFO
+  # Blend (HFC-32/125/134a HFO-") continues on the next row (e.g.
+  # "1234yf)"), which otherwise has no general/sub/specific-use of its own
+  # -- merge it back rather than keep the truncated name.
+  unbalanced <- str_count(coalesce(tab$substance, ""), fixed("(")) -
+    str_count(coalesce(tab$substance, ""), fixed(")"))
+  wrap_idx <- which(unbalanced > 0)
+  if (length(wrap_idx) > 0) {
+    for (w in rev(wrap_idx)) {
+      if (w < nrow(tab) && is.na(tab$general_use[w + 1]) && is.na(tab$sub_use[w + 1])) {
+        tab$substance[w] <- paste0(tab$substance[w], tab$substance[w + 1])
+        tab <- tab[-(w + 1), ]
+      }
+    }
+  }
+
   tab$general_use <- ffill(tab$general_use)
   product <- apply(tab[c("general_use", "sub_use", "specific_use")], 1, function(r) {
     r <- r[!is.na(r) & str_trim(r) != ""]

@@ -15,8 +15,8 @@ strip_footnote_number <- function(x) str_remove(x, "(?<=[A-Za-z\\)])[0-9]{2,3}$"
 # Splits Use and Sub-use on commas into atomic items and returns every
 # "Use item: Sub-use item" combination (points 17-19).
 cross_product_products <- function(use, subuse) {
-  use_items <- if (is.na(use)) NA_character_ else str_trim(str_split(use, ",")[[1]])
-  subuse_items <- if (is.na(subuse)) NA_character_ else str_trim(str_split(subuse, ",")[[1]])
+  use_items <- if (is.na(use)) NA_character_ else split_respecting_parens(use)
+  subuse_items <- if (is.na(subuse)) NA_character_ else split_respecting_parens(subuse)
   combos <- expand_grid(u = use_items, s = subuse_items)
   products <- apply(combos, 1, function(r) {
     parts <- r[!is.na(r) & str_trim(r) != ""]
@@ -25,8 +25,68 @@ cross_product_products <- function(use, subuse) {
   products[!is.na(products)]
 }
 
+# A cell with an unclosed "(" (e.g. "Photoresist: Image applications
+# (surfactant,") continues on the next row (e.g. "additive and PAG)"),
+# which then has nothing of its own (no Examples) -- merge it back rather
+# than leave the Use/Sub-use text truncated mid-parenthesis.
+merge_paren_wraps <- function(tab, col, guard_col) {
+  x <- tab[[col]]
+  unbalanced <- str_count(coalesce(x, ""), fixed("(")) - str_count(coalesce(x, ""), fixed(")"))
+  wrap_idx <- which(unbalanced > 0)
+  for (w in rev(wrap_idx)) {
+    if (w < nrow(tab) && is.na(tab[[guard_col]][w + 1])) {
+      tab[[col]][w] <- paste0(x[w], tab[[col]][w + 1])
+      tab <- tab[-(w + 1), ]
+      x <- tab[[col]]
+    }
+  }
+  tab
+}
+
+# A few rows are footnote text that leaked into the Use column mid-table
+# (e.g. "77 Renewable energy systems are assessed in the Energy sector,
+# c.f. section A.3.13."), rather than at the end where load_table()'s
+# footnote-block cutoff catches them -- identifiable by a leading footnote
+# number ("NN "), a shape no real "Use category" value in this workbook
+# ever takes. Left alone these would (a) forward-fill into real rows below
+# once their own Sub-use is blank, and (b) sometimes carry the *previous*
+# real row's Examples value too (a PDF merged-cell artifact), generating a
+# spurious duplicate-ish output row of their own. Dropped outright rather
+# than blanked, so neither happens.
+drop_stray_footnote_rows <- function(tab, use_col, subuse_col = NULL, examples_col = NULL) {
+  use <- coalesce(tab[[use_col]], "")
+  subuse <- if (!is.null(subuse_col)) coalesce(tab[[subuse_col]], "") else rep("", nrow(tab))
+  # a footnote's own start row ("77 Renewable energy systems are
+  # assessed..."), or a continuation row of one that wrapped onto further
+  # physical rows without repeating the leading number (e.g. "metal
+  # products, c.f." / "If the coil-coated article is used in construction,
+  # it is assessed in the") -- cross-reference phrasing that never occurs
+  # in genuine Use/Sub-use text.
+  is_footnote <- str_detect(use, "^[0-9]{1,3}\\s") |
+    str_detect(use, regex("assessed in the|\\bc\\.f\\.", ignore_case = TRUE)) |
+    str_detect(subuse, regex("assessed in the|\\bc\\.f\\.", ignore_case = TRUE))
+  # a final trailing fragment of such a footnote (e.g. "Construction
+  # sector.") carries none of the above phrasing itself, but is
+  # identifiable as: a Use value, no Sub-use, and an Examples value that's
+  # an exact repeat of the row directly above (the PDF's merged-Examples-
+  # cell artifact) -- a real section-header row never repeats the
+  # previous row's Examples this way.
+  if (!is.null(examples_col)) {
+    examples <- tab[[examples_col]]
+    prev_examples <- c(NA_character_, examples[-length(examples)])
+    is_trailing_fragment <- use != "" & subuse == "" & !is.na(examples) &
+      !is.na(prev_examples) & examples == prev_examples
+    is_footnote <- is_footnote | is_trailing_fragment
+  }
+  tab[!is_footnote, , drop = FALSE]
+}
+
 extract_long_form <- function(sheet, use_col, subuse_col, examples_col, ffill_use = TRUE) {
   tab <- load_table(sheet)
+  if (!is.null(subuse_col)) tab <- merge_paren_wraps(tab, subuse_col, examples_col)
+  tab <- merge_paren_wraps(tab, use_col, examples_col)
+  tab <- drop_stray_footnote_rows(tab, use_col, subuse_col, examples_col)
+
   use <- strip_footnote_number(tab[[use_col]])
   if (ffill_use) use <- ffill(use)
   subuse <- if (!is.null(subuse_col)) strip_footnote_number(tab[[subuse_col]]) else rep(NA_character_, nrow(tab))

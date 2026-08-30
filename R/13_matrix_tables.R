@@ -50,8 +50,7 @@ split_list_text <- function(text) {
     last <- positions[nrow(positions), ]
     text <- paste0(str_sub(text, 1, last[1] - 1), ",", str_sub(text, last[2] + 1))
   }
-  parts <- str_trim(str_split(text, ",")[[1]])
-  parts[parts != ""]
+  split_respecting_parens(text)
 }
 
 extract_a123 <- function() {

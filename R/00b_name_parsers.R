@@ -107,7 +107,7 @@ split_shared_suffix_prefix_list <- function(name) {
   left <- m[1, 2]
   right <- m[1, 3]
 
-  left_prefixes <- str_trim(str_split(left, ",")[[1]])
+  left_prefixes <- split_respecting_parens(left)
   if (!all(str_detect(left_prefixes, LOCANT_TOKEN_RE))) return(NULL)
 
   rm <- str_match(right, regex(paste0("^([0-9]+(?::[0-9]+)?(?:-[0-9]+(?::[0-9]+)?)*(?:-di)?)\\s+(.+)$")))
@@ -117,6 +117,18 @@ split_shared_suffix_prefix_list <- function(name) {
 
   all_prefixes <- c(left_prefixes, last_prefix)
   paste(all_prefixes, suffix)
+}
+
+# For a "<chain-prefix> <descriptive suffix (ABBR) ...>" name produced by
+# split_shared_suffix_prefix_list(), pull out "<chain-prefix> <ABBR>" as
+# the abbreviation (e.g. "10:2 fluorotelomer alcohol (FTOH) and mono-
+# phosphate or di-phosphate" -> "10:2 FTOH"), since each chain length is a
+# distinct substance and a bare "FTOH" would collide across all of them.
+extract_chain_abbrev <- function(name) {
+  prefix <- str_extract(name, "^[0-9]+(:[0-9]+)?(-[0-9]+(:[0-9]+)?)*(-di)?")
+  abbr <- str_match(name, "\\(([A-Za-z][A-Za-z0-9]{1,9})\\)")[, 2]
+  if (is.na(prefix) || is.na(abbr)) return(NA_character_)
+  paste(prefix, abbr)
 }
 
 OR_SENTENCE_GUARD_RE <- regex(
@@ -133,8 +145,8 @@ split_or_synonyms <- function(name, cas) {
   x <- str_trim(m[1, 2])
   y <- str_trim(m[1, 3])
 
-  cas_list <- if (is.na(cas)) character(0) else str_trim(str_split(cas, "[,;]")[[1]])
-  cas_list <- cas_list[cas_list != "" & !vapply(cas_list, is_no_info, logical(1))]
+  cas_list <- if (is.na(cas)) character(0) else split_respecting_parens(cas)
+  cas_list <- cas_list[!vapply(cas_list, is_no_info, logical(1))]
 
   if (length(cas_list) >= 2) {
     return(tibble(substance_name = c(x, y), substance_synonym = NA_character_,
@@ -150,8 +162,7 @@ split_abbrev_synonym <- function(abbrev) {
   abbrev <- str_remove(abbrev, regex("^e\\.?g\\.?\\s*", ignore_case = TRUE))
   m <- str_match(abbrev, "^\\((.+)\\)$")
   if (!is.na(m[1, 1])) abbrev <- m[1, 2]
-  parts <- str_trim(str_split(abbrev, ",")[[1]])
-  parts <- parts[parts != ""]
+  parts <- split_respecting_parens(abbrev)
   if (length(parts) <= 1) return(list(abbrev = str_trim(abbrev), synonym = NA_character_))
   list(abbrev = parts[1], synonym = paste(parts[-1], collapse = ", "))
 }
@@ -190,13 +201,25 @@ process_substance_triple <- function(name, abbrev, cas, source_table) {
   }
 
   poly <- parse_polymer_of(name, cas, source_table)
+  # For a matched polymer-of entry, a multi-value CAS field is [substance's
+  # own CAS, monomer 1 CAS, monomer 2 CAS, ...] -- the full blob is right
+  # for the polymer table (already recorded by parse_polymer_of above), but
+  # the MAIN table's substance row should carry only the substance's own
+  # (first) CAS, not the monomers' CAS numbers mixed in.
+  main_cas <- if (poly$matched && !is.na(cas)) {
+    parts <- split_respecting_parens(cas)
+    if (length(parts) > 0) parts[1] else cas
+  } else cas
 
   shared_suffix <- split_shared_suffix_prefix_list(poly$main_name)
   if (!is.null(shared_suffix)) {
     result <- tibble(substance_name = shared_suffix, substance_synonym = NA_character_,
-                      substance_group = NA_character_, cas_number = cas)
+                      substance_group = NA_character_, cas_number = main_cas,
+                      abbreviation = map_chr(shared_suffix, extract_chain_abbrev))
+    result$abbreviation_synonym <- NA_character_
+    return(result)
   } else {
-    result <- split_or_synonyms(poly$main_name, cas)
+    result <- split_or_synonyms(poly$main_name, main_cas)
     result$substance_group <- NA_character_
     # Point 6: a plain class/group name (no "a polymer of", no "or" split)
     # with multiple CAS numbers -- one row per CAS, substance_group set to
@@ -204,9 +227,12 @@ process_substance_triple <- function(name, abbrev, cas, source_table) {
     # multi-value CAS field is [substance CAS, monomer CAS, ...], not
     # several alternate CAS for the same substance.
     if (!poly$matched && nrow(result) == 1 && !is.na(cas)) {
-      cas_list <- str_trim(str_split(cas, "[,;]")[[1]])
-      cas_list <- cas_list[cas_list != "" & !vapply(cas_list, is_no_info, logical(1))]
-      if (length(cas_list) >= 2) {
+      cas_list <- split_respecting_parens(cas)
+      cas_list <- cas_list[!vapply(cas_list, is_no_info, logical(1))]
+      # only expand if every piece actually looks like a CAS number --
+      # guards against e.g. "56357-87-0 (ethene, fluoro, polymer mixture)"
+      # (one real CAS with a parenthetical note) being mistaken for several
+      if (length(cas_list) >= 2 && all(str_detect(cas_list, "^[0-9]{2,7}-[0-9]{2}-[0-9]$"))) {
         result <- tibble(substance_name = rep(result$substance_name, length(cas_list)),
                           substance_synonym = NA_character_,
                           substance_group = result$substance_name,

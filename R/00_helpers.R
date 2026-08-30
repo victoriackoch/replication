@@ -188,7 +188,7 @@ is_no_info <- function(x) {
 }
 
 CLASS_PREFIX_RE <- regex(
-  "(Polymeric PFAS[s]?\\s*:|Non-polymeric PFAS[s]?\\s*:|Fluorinated gas(es)?\\s*:)",
+  "(Polymeric PFAS[s]?\\s*:|Non-polymeric PFAS[s]?\\s*:|Polymeric\\s*:|Non-polymeric\\s*:|Fluorinated gas(es)?\\s*:)",
   ignore_case = TRUE
 )
 
@@ -204,23 +204,39 @@ CONFIDENTIAL_RE <- regex(
 # commas in a proper chemical name (rare in these free-text list cells,
 # which are mostly short acronyms) may split incorrectly -- flagged
 # separately for spot-checking rather than guarded against here.
+# A handful of "Examples of PFAS" cells run several class labels together
+# with no delimiter at all between them ("...PFA, PTFE Copolymers for
+# PVDF: VDF, TrFE..." -- no comma before "Copolymers"), which no generic
+# splitter can recover. Overridden by exact text match rather than parsed.
+SUBSTANCE_LIST_OVERRIDES <- list(
+  "Polymeric PFAS: Fluoroelastomer, PVDF, PFA, PTFE Copolymers for PVDF: VDF, TrFE, TFE, CTFE, HFP Non-polymeric: LiTFSI, LiTFS" =
+    c("Fluoroelastomer", "PVDF", "PFA", "PTFE", "VDF", "TrFE", "TFE", "CTFE", "HFP", "LiTFSI", "LiTFS")
+)
+
 split_substance_list <- function(text) {
   if (is_no_info(text)) return(character(0))
+  for (key in names(SUBSTANCE_LIST_OVERRIDES)) {
+    if (str_trim(text) == key) return(SUBSTANCE_LIST_OVERRIDES[[key]])
+  }
   # replace (rather than delete) each class prefix with a delimiter, so the
   # boundary between class-tagged segments also becomes a split point
   cleaned <- str_replace_all(text, CLASS_PREFIX_RE, ";")
   cleaned <- str_remove_all(cleaned, CONFIDENTIAL_RE)
-  parts <- unlist(str_split(cleaned, "[;,]"))
-  parts <- str_trim(parts)
+  parts <- split_respecting_parens(cleaned)
   parts <- parts[parts != "" & !vapply(parts, is_no_info, logical(1))]
   # Occasionally a "Full descriptive name; ABBREV" pair for one substance
   # gets split apart by the ";" above (e.g. "Lithium Bis
   # (trifluoromethanesulfonyl)imide; LITFSI"). Re-merge a bare acronym
-  # token into the preceding non-acronym chunk so parse_name_abbrev() can
-  # recover it as one name+abbreviation pair instead of two fragments.
+  # token into the preceding chunk so parse_name_abbrev() can recover it as
+  # one name+abbreviation pair instead of two fragments -- but only when
+  # the preceding chunk is a multi-word full name (contains a space), not
+  # a short single-word class label like "Fluoroelastomer" or "PTFE",
+  # which is legitimately its own separate list item (e.g. "Fluoroelastomer,
+  # PVDF, PFA, PTFE" is four distinct substances, not one name+abbreviation).
   keep <- rep(TRUE, length(parts))
   for (i in seq_along(parts)) {
-    if (i > 1 && keep[i - 1] && is_acronym_token(parts[i]) && !is_acronym_token(parts[i - 1])) {
+    if (i > 1 && keep[i - 1] && is_acronym_token(parts[i]) &&
+        !is_acronym_token(parts[i - 1]) && str_detect(parts[i - 1], "\\s")) {
       parts[i - 1] <- paste0(parts[i - 1], " (", parts[i], ")")
       keep[i] <- FALSE
     }
@@ -244,6 +260,34 @@ split_substance_list <- function(text) {
   }
   parts <- parts[keep2]
   unique(parts)
+}
+
+# Splits text on delimiter characters (default ",;"), but ignores any
+# delimiter that falls inside parentheses -- so "Lithium-ion batteries
+# (Prismatic, cylindrical and pouch) (secondary)" splits as one item, not
+# three, and CAS field "56357-87-0 (ethene, fluoro, polymer mixture)"
+# stays one CAS with a descriptive note, not three fake CAS numbers. Used
+# everywhere a comma/semicolon list needs splitting in this workbook,
+# since parenthesised commas turn out to be common throughout.
+split_respecting_parens <- function(text, delims = ",;") {
+  if (is.na(text)) return(character(0))
+  chars <- str_split(text, "")[[1]]
+  depth <- 0
+  out <- character(0)
+  buf <- character(0)
+  for (ch in chars) {
+    if (ch == "(") depth <- depth + 1
+    if (ch == ")") depth <- max(0, depth - 1)
+    if (depth == 0 && ch %in% str_split(delims, "")[[1]]) {
+      out <- c(out, paste(buf, collapse = ""))
+      buf <- character(0)
+    } else {
+      buf <- c(buf, ch)
+    }
+  }
+  out <- c(out, paste(buf, collapse = ""))
+  parts <- str_trim(out)
+  parts[parts != ""]
 }
 
 all_tables <- list()
