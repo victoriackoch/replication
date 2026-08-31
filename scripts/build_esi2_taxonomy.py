@@ -168,6 +168,31 @@ for sheet in DATA_SHEETS:
     current_subsub_name = None
     current_subsub_structure = None
 
+    def row_fields(r):
+        """Read this row's own logical-field values via the sheet's column map."""
+        name_raw = ws.cell(row=r, column=col_map["name"]).value
+        formula = ws.cell(row=r, column=col_map["chemical_formula"]).value if "chemical_formula" in col_map else None
+        has_name = name_raw is not None and str(name_raw).strip() != ""
+        name, abbrev = split_name_abbrev(name_raw) if has_name else (None, None)
+        return {
+            "name": name, "abbrev": abbrev, "formula": formula,
+            "acronym": cell_str(ws.cell(row=r, column=col_map["acronym"]).value) if "acronym" in col_map else None,
+            "acronym_2": cell_str(ws.cell(row=r, column=col_map["acronym_2"]).value) if "acronym_2" in col_map else None,
+            "mass": ws.cell(row=r, column=col_map["mass"]).value if "mass" in col_map else None,
+            "cas": cell_str(ws.cell(row=r, column=col_map["cas"]).value),
+            "trade_names": ws.cell(row=r, column=col_map["trade_names"]).value if "trade_names" in col_map else None,
+            "oecd": ws.cell(row=r, column=col_map["oecd"]).value if "oecd" in col_map else None,
+        }
+
+    def emit(f, subsub_name, subsub_structure):
+        global total
+        ws_out.append([
+            group, current_subgroup, subsub_name, subsub_structure,
+            f["acronym"], f["acronym_2"], f["name"], f["abbrev"], f["formula"],
+            f["mass"], f["cas"], f["trade_names"], f["oecd"],
+        ])
+        total += 1
+
     for r in range(2, ws.max_row + 1):
         sig = fill_signature(ws.cell(row=r, column=1))
         label = cell_str(ws.cell(row=r, column=1).value)
@@ -181,28 +206,32 @@ for sheet in DATA_SHEETS:
         if is_subsubgroup_row(sig):
             if label:
                 current_subsub_name, current_subsub_structure = split_name_structure(label)
+            # This header row occasionally carries its OWN real data (its
+            # own CAS number in particular) rather than being a purely
+            # generic class description -- e.g. on the Fluorotelomer-based
+            # sheet, "(n:2) Fluorotelomer methacrylates (FTMACs)
+            # CnF2n+1CH2CH2OC(O)C(CH3)=CH2" itself has CAS 65530-66-7. When
+            # that happens it's a real, distinct substance in its own
+            # right (using its own split name/structure as the name/
+            # formula, since the sheet's Name column is blank on this
+            # row), not just a label for the rows below -- emit it too.
+            # Only the CAS column is a reliable signal here: "acronym" (and,
+            # on some sheets, "structure") is mapped to column 1 itself --
+            # the very cell this header's own label text lives in -- so it
+            # would spuriously read back as "populated" on every header row.
+            f = row_fields(r)
+            if f["cas"]:
+                f["name"], f["formula"] = current_subsub_name, current_subsub_structure
+                f["acronym"] = None
+                emit(f, current_subsub_name, current_subsub_structure)
             continue
 
-        name_raw = ws.cell(row=r, column=col_map["name"]).value
-        formula = ws.cell(row=r, column=col_map["chemical_formula"]).value if "chemical_formula" in col_map else None
-        has_name = name_raw is not None and str(name_raw).strip() != ""
-        has_formula = formula is not None and str(formula).strip() != ""
+        f = row_fields(r)
+        has_name = f["name"] is not None
+        has_formula = f["formula"] is not None and str(f["formula"]).strip() != ""
         if not has_name and not has_formula:
             continue  # blank separator / image-placeholder row
-
-        name, abbrev = split_name_abbrev(name_raw) if has_name else (None, None)
-        acronym = cell_str(ws.cell(row=r, column=col_map["acronym"]).value) if "acronym" in col_map else None
-        acronym_2 = cell_str(ws.cell(row=r, column=col_map["acronym_2"]).value) if "acronym_2" in col_map else None
-        mass = ws.cell(row=r, column=col_map["mass"]).value if "mass" in col_map else None
-        cas = cell_str(ws.cell(row=r, column=col_map["cas"]).value)
-        trade_names = ws.cell(row=r, column=col_map["trade_names"]).value if "trade_names" in col_map else None
-        oecd = ws.cell(row=r, column=col_map["oecd"]).value if "oecd" in col_map else None
-
-        ws_out.append([
-            group, current_subgroup, current_subsub_name, current_subsub_structure,
-            acronym, acronym_2, name, abbrev, formula, mass, cas, trade_names, oecd,
-        ])
-        total += 1
+        emit(f, current_subsub_name, current_subsub_structure)
 
 widths = [30, 40, 40, 30, 12, 14, 45, 16, 20, 14, 16, 25, 16]
 for i, w in enumerate(widths, start=1):
@@ -228,6 +257,18 @@ notes.append(["column that sheet's own row-1 header names it, rather than a fixe
 notes.append(["(Fluoropolymer inserts 'Acronym 2' and drops 'Structure'; Non-polymers_Polymers drops the mass column entirely), which a"])
 notes.append(["fixed-position read had been silently misaligning (pulling Reference-CAS/Function text into the cas_number/oecd_inclusion"])
 notes.append(["columns, and skipping nearly every Fluoropolymer row because it mistook the blank 'Acronym 2' column for the 'Name' column)."])
+notes.append([""])
+notes.append(["A sub_sub_group header row is occasionally ALSO a real entry in its own right, not just a label for the rows below it -- e.g. on"])
+notes.append(["Fluorotelomer-based, '(n:2) Fluorotelomer methacrylates (FTMACs)   CnF2n+1CH2CH2OC(O)C(CH3)=CH2' itself has CAS 65530-66-7. Detected"])
+notes.append(["by that row's own CAS column being populated (12 such rows across the workbook, all on Fluorotelomer-based); when found, it is"])
+notes.append(["emitted as its own row (name/chemical_formula taken from its own split sub_sub_group_name/structure) in addition to setting the"])
+notes.append(["running sub_sub_group context for the rows that follow it."])
+notes.append([""])
+notes.append(["This table's row count (1883) runs higher than the 'Number of PFAS' column on the 'Overview' sheet (1810, or 1822 counting the 12"])
+notes.append(["dual-role sub_sub_group rows above): Overview's count appears to only tally entries that carry a"])
+notes.append(["real registered CAS number, while several sheets (Cyclic PFAS especially, +43) also list additional named structural analogues"])
+notes.append(["the source describes but never assigned a CAS to (e.g. 'Perfluoromethylcycloheptane') -- kept here since they are still real,"])
+notes.append(["named entries in the source sheet, just not CAS-registered. Filter cas_number non-blank to reproduce Overview's stricter count."])
 notes.column_dimensions["A"].width = 118
 
 wb_out.save(OUT_XLSX)
