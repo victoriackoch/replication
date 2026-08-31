@@ -1,6 +1,9 @@
+import sys
 import openpyxl
 from openpyxl.utils import column_index_from_string
-from rapidfuzz import fuzz, process
+
+sys.path.insert(0, "scripts")
+from matching_utils import top_matches_batch
 
 GAINES_XLSX = "/root/.claude/uploads/9c3a0553-6723-59bf-af99-2ae863779397/3a2ebc01-Gaines_US_EPA_PFA_Mapping.xlsx"
 ECHA_XLSX = "/root/.claude/uploads/9c3a0553-6723-59bf-af99-2ae863779397/55d8c115-ECHA_compiled.xlsx"
@@ -37,11 +40,11 @@ for i in range(1, TOP_N + 1):
     headers += [f"best match {i} (Downstream Use Taxonomy, col AS)", f"similarity {i} (0-100)"]
 ws_out.append(headers)
 
-for d in details:
-    matches = process.extract(d, as_values, scorer=fuzz.token_set_ratio, limit=TOP_N)
+all_matches = top_matches_batch(details, as_values, top_n=TOP_N)
+for d, matches in zip(details, all_matches):
     line = [d]
-    for match_text, score, _ in matches:
-        line += [match_text, round(score, 1)]
+    for match_text, score in matches:
+        line += [match_text, score]
     ws_out.append(line)
 
 widths = [70] + [55, 12] * TOP_N
@@ -55,6 +58,8 @@ notes.append(["For each unique value in Gaines_US_EPA_PFA_Mapping.xlsx, sheet 'T
 notes.append(["use/application description per chemical row), the top 3 closest text matches were found among the unique values in"])
 notes.append(["ECHA_compiled.xlsx, sheet 'Downstream Use Taxonomy', column AS ('PFAS-reliant product/component'), using RapidFuzz's"])
 notes.append(["token_set_ratio (0-100; 100 = same words, order/case-insensitive)."])
+notes.append(["Before scoring, both sides are expanded with a domain synonym dictionary (scripts/matching_utils.py) so e.g. a clothing-item name"])
+notes.append(["matches a general 'clothing/apparel' taxonomy entry, and PFAS-chemistry abbreviations match their spelled-out form."])
 notes.append([""])
 notes.append(["A high score means the two text strings share most of their words; it is NOT a chemical or regulatory equivalence claim."])
 notes.append(["Scores below ~50 are generally weak matches and should be treated as 'no good match found' -- spot-check before relying on them."])

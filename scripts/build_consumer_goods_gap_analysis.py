@@ -1,6 +1,9 @@
+import sys
 import openpyxl
 from openpyxl.utils import column_index_from_string
-from rapidfuzz import fuzz, process
+
+sys.path.insert(0, "scripts")
+from matching_utils import top_matches_batch
 
 CG_XLSX = "/root/.claude/uploads/9c3a0553-6723-59bf-af99-2ae863779397/c777292b-US_Consumer_Goods_Goods_only.xlsx"
 ECHA_XLSX = "/root/.claude/uploads/9c3a0553-6723-59bf-af99-2ae863779397/55d8c115-ECHA_compiled.xlsx"
@@ -30,9 +33,9 @@ as_values = sorted(set(as_values))
 print("unique AS values:", len(as_values))
 
 TOP_N = 3
+all_matches = top_matches_batch(products, as_values, top_n=TOP_N)
 rows = []
-for p in products:
-    matches = process.extract(p, as_values, scorer=fuzz.token_set_ratio, limit=TOP_N)
+for p, matches in zip(products, all_matches):
     best_score = matches[0][1] if matches else 0
     rows.append((p, matches, best_score))
 
@@ -48,8 +51,8 @@ for i in range(1, TOP_N + 1):
 ws_out.append(headers)
 for p, matches, best_score in rows:
     line = [p, "YES" if best_score < GAP_THRESHOLD else ""]
-    for match_text, score, _ in matches:
-        line += [match_text, round(score, 1)]
+    for match_text, score in matches:
+        line += [match_text, score]
     ws_out.append(line)
 widths = [55, 16] + [55, 12] * TOP_N
 for i, w in enumerate(widths, start=1):
@@ -61,7 +64,7 @@ gap_only.append(["Consumer Products, column I (Product)", "best match found (col
 n_gaps = 0
 for p, matches, best_score in rows:
     if best_score < GAP_THRESHOLD:
-        gap_only.append([p, matches[0][0] if matches else "", round(best_score, 1)])
+        gap_only.append([p, matches[0][0] if matches else "", best_score])
         n_gaps += 1
 gap_only.column_dimensions["A"].width = 55
 gap_only.column_dimensions["B"].width = 55
@@ -74,6 +77,8 @@ notes.append(["Method"])
 notes.append(["For each unique value in US_Consumer_Goods_Goods_only.xlsx, sheet 'Sources in Consumer Products', column I (Product),"])
 notes.append(["the top 3 closest text matches were found among the unique values in ECHA_compiled.xlsx, sheet 'Downstream Use Taxonomy',"])
 notes.append(["column AS ('PFAS-reliant product/component'), using RapidFuzz's token_set_ratio (0-100; 100 = same words, order/case-insensitive)."])
+notes.append(["Before scoring, both sides are expanded with a domain synonym dictionary (scripts/matching_utils.py) so e.g. a clothing-item name"])
+notes.append(["matches a general 'clothing/apparel' taxonomy entry, and PFAS-chemistry abbreviations match their spelled-out form."])
 notes.append([f"A product is flagged 'likely missing from col AS' when its best match scores below {GAP_THRESHOLD} -- i.e. the product name shares"])
 notes.append(["little or no wording with anything already in that taxonomy column, suggesting that kind of product/component isn't represented there yet."])
 notes.append([""])
