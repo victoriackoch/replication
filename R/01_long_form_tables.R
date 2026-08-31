@@ -117,6 +117,17 @@ extract_long_form <- function(sheet, use_col, subuse_col, examples_col, ffill_us
   if (!is.null(subuse_col)) tab <- merge_paren_wraps(tab, subuse_col, examples_col)
   tab <- merge_paren_wraps(tab, use_col, examples_col)
   tab <- drop_stray_footnote_rows(tab, use_col, subuse_col, examples_col)
+  # a Sub-use cell built as a bulleted "•"-list rollup (e.g. A.57's PEM
+  # fuel cells "Membrane electrode assemblies (MEA)62: • catalyst coated
+  # membrane (CCM), • gas diffusion layer (GDL), ...") duplicates -- with
+  # a generic, less specific Examples value -- what the rows right below
+  # it already give individually, one sub-use per row ("MEA-Catalyst
+  # coated membrane...", "MEA-Gas diffusion layer (GDL)", ...). Splitting
+  # its own comma/bullet mix would only add lower-quality duplicate rows,
+  # so it's dropped rather than parsed.
+  if (!is.null(subuse_col)) {
+    tab <- tab[!str_detect(coalesce(tab[[subuse_col]], ""), fixed("•")), , drop = FALSE]
+  }
 
   use <- strip_footnote_number(tab[[use_col]])
   if (ffill_use) use <- ffill(use)
@@ -138,7 +149,7 @@ extract_long_form <- function(sheet, use_col, subuse_col, examples_col, ffill_us
 
 add_table(extract_long_form("A.51", "Use category", "Sub-use", "Examples of PFASs"))
 add_table(extract_long_form("A.53", "Use category", "Sub-use", "Examples of PFAS"))
-add_table(extract_long_form("A.59", "Use category", "Sub-use(s)", "Examples of PFASs"))
+add_table(extract_long_form("A.59", "Use category", "Sub-use(s) - short form", "Examples of PFASs"))
 add_table(extract_long_form("A.83", "Use", "Sub-use", "Examples of PFASs used"))
 # A.62 (lubricants) and A.90 (broader industrial, embedded CAS numbers) need
 # bespoke handling -- see 02_a62_lubricants.R and 05_name_cas_free_text.R

@@ -54,6 +54,11 @@ a62_lookup <- tribble(
     "PTFE;Other fluoropolymers (Confidential substances);Side-chain fluorinated polymers;Solvents used as carrier fluids [fluorinated gas]",
   "Polymeric PFAS: PTFE PFPE Unspecified PFAS assumed to be fluoropolymers PCTFE (oils and greases)", "PTFE;PFPE;PCTFE",
   "Polymeric PFAS: Unspecified PFAS assumed to be fluoropolymers Fluorocarbon gel (not further specified)", "Fluorocarbon gel (not further specified)",
+  # the manually-cleaned source (see file header) removed the stray
+  # continuation row but left this cell itself still truncated at "...(not
+  # further" with no closing " specified)" -- same substance as the entry
+  # just above.
+  "Polymeric PFAS: Unspecified PFAS assumed to be fluoropolymers Fluorocarbon gel (not further", "Fluorocarbon gel (not further specified)",
   "Polymeric PFAS: Fluoropolymer (Not further specified)", "Fluoropolymer (Not further specified)",
   "Polymeric PFAS: PCTFE (oil and grease) PFPE", "PCTFE;PFPE"
 )

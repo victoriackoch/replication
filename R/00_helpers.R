@@ -238,7 +238,7 @@ SUBSTANCE_LIST_OVERRIDES <- list(
   # compound names depending on position (some extend the preceding
   # acronym, some start the next one), which no generic rule can tell
   # apart; hand-reconstructed instead.
-  "Polymeric PFAS: PTFE, FVMQ (CAS 63148-56-1/ 68037-87-6), PVDF copolymer, PFPE etc. Non-polymeric PFAS: HFP, 1,1,2,2,3,3,4-hepta fluoro cyclopentane, Tetraethylammonium heptadecafluorooctanesulphon ate, Tetraethylazanium nonafluorobutane-1-sulfonate, Propene, 1,3,3,3,-tetrafluoro- ,(E)-, 1,1,1,2- Tetrafluoroethane, 1,1,1,2,2,3,4,5,5,5-decafluoro- 3-methoxy-4- (trifluoromethyl)pentane, 1-ethoxynonafluorobutane etc." =
+  "Polymeric PFAS: PTFE, FVMQ (CAS 63148-56-1/ 68037-87-6), PVDF copolymer, PFPE etc. Non-polymeric PFAS: HFP, 1,1,2,2,3,3,4-hepta fluorocyclopentane, Tetraethylammonium heptadecafluorooctanesulphon ate, Tetraethylazanium nonafluorobutane-1-sulfonate, Propene, 1,3,3,3,-tetrafluoro- ,(E)-, 1,1,1,2- Tetrafluoroethane, 1,1,1,2,2,3,4,5,5,5-decafluoro- 3-methoxy-4- (trifluoromethyl)pentane, 1-ethoxynonafluorobutane etc." =
     # "FVMQ (CAS 63148-56-1/68037-87-6)" is kept as the bare acronym "FVMQ"
     # here rather than "FVMQ" with the CAS pair as its "name" (which is what
     # parse_name_abbrev's "ACRONYM (text)" pattern would otherwise do with
@@ -320,13 +320,9 @@ SUBSTANCE_LIST_OVERRIDES <- list(
   "Non-polymeric PFAS: Side-chain fluorinated polymers (Water-insoluble C1 PFAS polymers), Bisphenol AF, fluorinated polyimide, 4,4'-Oxybisbenzoic acid polymer with rel-(3aR,4S,7R,7aS)-3a,4,7,7a-tetrahydro-4,7-methanoisobenzofuran-1,3-dione and 4,4'-[2,2,2-trifluoro-1- (trifluoromethyl)ethylidene]bis[2-aminophenol]" =
     c("Side-chain fluorinated polymers (Water-insoluble C1 PFAS polymers)", "Bisphenol AF", "Fluorinated polyimide",
       "4,4'-Oxybisbenzoic acid polymer with rel-(3aR,4S,7R,7aS)-3a,4,7,7a-tetrahydro-4,7-methanoisobenzofuran-1,3-dione and 4,4'-[2,2,2-trifluoro-1-(trifluoromethyl)ethylidene]bis[2-aminophenol]"),
-  # same row repeated later in the sheet (row 51), missing the "fluorinated
-  # polyimide" item -- the source cell itself is cut off mid-word at
-  # "...(3aR,4S,7R,7aS)-" and continues on the next physical row (52, with
-  # no Sub-use of its own), which merge_orphan_examples_rows() reattaches
-  # with a literal space, so this is what split_substance_list actually
-  # receives (note the space after the dash, unlike row 11's version).
-  "Non-polymeric PFAS: Side-chain fluorinated polymers (Water-insoluble C1 PFAS polymers), Bisphenol AF, 4,4'-Oxybisbenzoic acid polymer with rel-(3aR,4S,7R,7aS)- 3a,4,7,7a-tetrahydro-4,7-methanoisobenzofuran-1,3-dione and 4,4'-[2,2,2-trifluoro-1- (trifluoromethyl)ethylidene]bis[2-aminophenol]" =
+  # same row repeated later in the sheet, missing the "fluorinated
+  # polyimide" item.
+  "Non-polymeric PFAS: Side-chain fluorinated polymers (Water-insoluble C1 PFAS polymers), Bisphenol AF, 4,4'-Oxybisbenzoic acid polymer with rel-(3aR,4S,7R,7aS)-3a,4,7,7a-tetrahydro-4,7-methanoisobenzofuran-1,3-dione and 4,4'-[2,2,2-trifluoro-1- (trifluoromethyl)ethylidene]bis[2-aminophenol]" =
     c("Side-chain fluorinated polymers (Water-insoluble C1 PFAS polymers)", "Bisphenol AF",
       "4,4'-Oxybisbenzoic acid polymer with rel-(3aR,4S,7R,7aS)-3a,4,7,7a-tetrahydro-4,7-methanoisobenzofuran-1,3-dione and 4,4'-[2,2,2-trifluoro-1-(trifluoromethyl)ethylidene]bis[2-aminophenol]"),
 
@@ -343,12 +339,13 @@ SUBSTANCE_LIST_OVERRIDES <- list(
   # the (colon-less) class label.
   "Non-polymeric PFASs, PFHxA, fluorinated polyimide." = c("PFHxA", "fluorinated polyimide"),
 
-  # A.51 "Piezzoelectric devices": "PVDF and co-polymers, PFPE e.g. CAS no.
-  # 69991-67-9" -- the "e.g." here isn't introducing named examples of PFPE
-  # (there's nothing after the CAS clause once it's stripped), it's just
-  # supplementary info about PFPE itself; the general "such as"/"e.g."
-  # class-name-drop rule would otherwise discard "PFPE" along with it.
-  "Polymeric PFAS: PVDF and co-polymers, PFPE e.g. CAS no. 69991-67-9" = c("PVDF and co-polymers", "PFPE"),
+  # A.51 "Piezzoelectric devices": "PVDF and co-polymers, PFPE" -- the "and"
+  # inside "PVDF and co-polymers" is part of that one item's own name, not
+  # a list separator, but replace_last_and()'s generic rule (replace the
+  # LAST " and " with a comma) would still catch it here since it's the
+  # only " and " in the string, splitting it into three items instead of
+  # two ("PVDF", "co-polymers", "PFPE").
+  "Polymeric PFAS: PVDF and co-polymers, PFPE" = c("PVDF and co-polymers", "PFPE"),
 
   # A.51 "Plastic additives: Anti-drip agent / flame retardant additive in
   # plastics": one copolymer IUPAC name built as "A, B, polymer with C and
@@ -367,8 +364,8 @@ SUBSTANCE_LIST_OVERRIDES <- list(
   # irregular (multiple distinct compounds each individually shredded by
   # the same locant-comma ambiguity split_substance_list can't resolve
   # between separate names) for the generic splitter; hand-split instead.
-  "Fluorinated gases: HFO and HFE. HFO e.g. (Z)-1,1,1,4,4,4-Hexafluoro-2-buten, HFE e.g. Butane, 1-ethoxy-1,1,2,2,3,3,4,4,4-nonafluoro-, 2,3,3,4,4-pentafluoro-5-methoxy-2,5-bis[1,2,2,2-tetrafluoro-1- (trifluoromethyl)ethyl]tetrahyd rofuran, 1,1,1,2,2,4,5,5,5-nonafluoro- 4-(trifluoromethyl)-3-pentanone, 2-(Trifluoromethyl)-3-ethoxydodecafluorohexane, HFE-7100; CAS No. 163702-08-7, HFE-7200; CAS No. 163702-05-4, HFE-7300; CAS No. 132182-92-4, HFE-7500; CAS No. 297730-93-9, HFE- 356mec; CAS No. 382-34-3 Non-polymeric PFAS: Perfluamine, Reaction mass of 1,1,2,2,3,3,4,4,4-nonafluoro- N,N-bis(nonafluorobutyl)butan- 1-amine and 1,1,2,2,3,3,4,4,4-nonafluoro-N-[1,1,2,3,3-hexafluoro-2- (trifluoromethyl)propyl]-N- (1,1,2,2,3,3,4,4,4-nonafluorobutyl)butan-1-amine, nonafluoro-2-trifluoromethyl-3-pentanone (CAS number 756-13-8)" =
-    c("(Z)-1,1,1,4,4,4-Hexafluoro-2-butene",
+  "Polymeric PFAS: PFPE Fluorinated gases: HFO and HFE. HFO e.g. (Z)-1,1,1,4,4,4-Hexafluoro-2-buten, HFE e.g. Butane, 1-ethoxy-1,1,2,2,3,3,4,4,4-nonafluoro-, 2,3,3,4,4-pentafluoro-5-methoxy-2,5-bis[1,2,2,2-tetrafluoro-1- (trifluoromethyl)ethyl]tetrahyd rofuran, 1,1,1,2,2,4,5,5,5-nonafluoro- 4-(trifluoromethyl)-3-pentanone, 2-(Trifluoromethyl)-3-ethoxydodecafluorohexane, HFE-7100; CAS No. 163702-08-7, HFE-7200; CAS No. 163702-05-4, HFE-7300; CAS No. 132182-92-4, HFE-7500; CAS No. 297730-93-9, HFE- 356mec; CAS No. 382-34-3 Non-polymeric PFAS: Perfluamine, Reaction mass of 1,1,2,2,3,3,4,4,4-nonafluoro- N,N-bis(nonafluorobutyl)butan- 1-amine and 1,1,2,2,3,3,4,4,4-nonafluoro-N-[1,1,2,3,3-hexafluoro-2- (trifluoromethyl)propyl]-N- (1,1,2,2,3,3,4,4,4-nonafluorobutyl)butan-1-amine, nonafluoro-2-trifluoromethyl-3-pentanone (CAS number 756-13-8)" =
+    c("PFPE", "(Z)-1,1,1,4,4,4-Hexafluoro-2-butene",
       "Butane, 1-ethoxy-1,1,2,2,3,3,4,4,4-nonafluoro-",
       "2,3,3,4,4-pentafluoro-5-methoxy-2,5-bis[1,2,2,2-tetrafluoro-1-(trifluoromethyl)ethyl]tetrahydrofuran",
       "1,1,1,2,2,4,5,5,5-nonafluoro-4-(trifluoromethyl)-3-pentanone",
