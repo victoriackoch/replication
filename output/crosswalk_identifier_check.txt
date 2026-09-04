@@ -1,0 +1,63 @@
+==============================================================================
+1. Within-sheet duplicate labels (whitespace/case-only differences)
+==============================================================================
+  none found
+
+==============================================================================
+2. Likely typo/formatting mismatches for the SAME taxonomy across sheets
+==============================================================================
+  none found
+
+==============================================================================
+3. Semicolon-concatenated labels (two categories merged into one string)
+==============================================================================
+  [kemi_oecd / substance_group_kemi] 18 row(s): 'Perfluorocarboxylic acids, long-chain, and its derivatives;Perfluorooctanoic acid (PFOA) and its derivatives'
+      parts also appear standalone elsewhere: ['Perfluorocarboxylic acids, long-chain, and its derivatives', 'Perfluorooctanoic acid (PFOA) and its derivatives']
+  [kemi_oecd / substance_group_kemi] 4 row(s): 'Perfluorohexanesulfonic acid (PFHxS) and its derivatives;Perfluorooctanesulfonic acid (PFOS) and its derivatives'
+      parts also appear standalone elsewhere: ['Perfluorohexanesulfonic acid (PFHxS) and its derivatives', 'Perfluorooctanesulfonic acid (PFOS) and its derivatives']
+  [kemi_esi2_group / substance_group_kemi] 3 row(s): 'Perfluorocarboxylic acids, long-chain, and its derivatives;Perfluorooctanoic acid (PFOA) and its derivatives'
+      parts also appear standalone elsewhere: ['Perfluorocarboxylic acids, long-chain, and its derivatives', 'Perfluorooctanoic acid (PFOA) and its derivatives']
+  [kemi_esi2_subgroup / substance_group_kemi] 5 row(s): 'Perfluorocarboxylic acids, long-chain, and its derivatives;Perfluorooctanoic acid (PFOA) and its derivatives'
+      parts also appear standalone elsewhere: ['Perfluorocarboxylic acids, long-chain, and its derivatives', 'Perfluorooctanoic acid (PFOA) and its derivatives']
+
+==============================================================================
+4. Known/likely typos in taxonomy labels (checked against domain spelling and cross-referenced against this project's own canonical ESI-2 taxonomy table)
+==============================================================================
+  [kemi_oecd / substance_group_oecd] 'Perfluoaoalkyl halides (other than iodides)' -> likely 'Perfluoroalkyl halides (other than iodides)'
+      'Perfluoaoalkyl' is not a real chemistry term; every other OECD label uses 'Perfluoroalkyl'.
+  [oecd_esi2_group / substance_group_oecd] 'Perfluoaoalkyl halides (other than iodides)' -> likely 'Perfluoroalkyl halides (other than iodides)'
+      'Perfluoaoalkyl' is not a real chemistry term; every other OECD label uses 'Perfluoroalkyl'.
+  [oecd_esi2_subgroup / substance_group_oecd] 'Perfluoaoalkyl halides (other than iodides)' -> likely 'Perfluoroalkyl halides (other than iodides)'
+      'Perfluoaoalkyl' is not a real chemistry term; every other OECD label uses 'Perfluoroalkyl'.
+  [kemi_oecd / substance_group_oecd] 'Perfluoroalkanes & armoatics' -> likely 'Perfluoroalkanes & aromatics'
+      'armoatics' -- 'aromatics' is spelled correctly in 11 other OECD/ESI2 labels in this same file.
+  [oecd_esi2_group / substance_group_oecd] 'Perfluoroalkanes & armoatics' -> likely 'Perfluoroalkanes & aromatics'
+      'armoatics' -- 'aromatics' is spelled correctly in 11 other OECD/ESI2 labels in this same file.
+  [oecd_esi2_subgroup / substance_group_oecd] 'Perfluoroalkanes & armoatics' -> likely 'Perfluoroalkanes & aromatics'
+      'armoatics' -- 'aromatics' is spelled correctly in 11 other OECD/ESI2 labels in this same file.
+  [oecd_dalmijn / substance_group_oecd] 'Perfluoroalkanes & armoatics' -> likely 'Perfluoroalkanes & aromatics'
+      'armoatics' -- 'aromatics' is spelled correctly in 11 other OECD/ESI2 labels in this same file.
+  [kemi_oecd / substance_group_oecd] 'Perfluoroalkyl ketons' -> likely 'Perfluoroalkyl ketones'
+      OECD's own label drops the 'e'; the ESI2 taxonomy's parallel label in the SAME workbook is correctly spelled 'Perfluoroalkyl ketones'.
+  [oecd_esi2_group / substance_group_oecd] 'Perfluoroalkyl ketons' -> likely 'Perfluoroalkyl ketones'
+      OECD's own label drops the 'e'; the ESI2 taxonomy's parallel label in the SAME workbook is correctly spelled 'Perfluoroalkyl ketones'.
+  [oecd_esi2_subgroup / substance_group_oecd] 'Perfluoroalkyl ketons' -> likely 'Perfluoroalkyl ketones'
+      OECD's own label drops the 'e'; the ESI2 taxonomy's parallel label in the SAME workbook is correctly spelled 'Perfluoroalkyl ketones'.
+  [kemi_esi2_group / substance_group_esi2] 'Hydofluoroether' -> likely 'Hydrofluoroether'
+      Missing 'r'. Inherited from the ECHA Annex A source workbook's own ESI-2 sheet (same typo was found there when this project's own ESI-2 taxonomy table was built) -- not introduced by this crosswalk file, but still worth a note since it's used as a real group label.
+  [oecd_esi2_group / substance_group_esi2] 'Hydofluoroether' -> likely 'Hydrofluoroether'
+      Missing 'r'. Inherited from the ECHA Annex A source workbook's own ESI-2 sheet (same typo was found there when this project's own ESI-2 taxonomy table was built) -- not introduced by this crosswalk file, but still worth a note since it's used as a real group label.
+  [kemi_esi2_subgroup / sub_group_esi2] 'Three-ring perfluroocarbons - no acids' -> likely 'Three-ring perfluorocarbons - no acids'
+      'perfluroocarbons' -- same ECHA-source typo as above, inherited rather than new.
+  [oecd_esi2_subgroup / sub_group_esi2] 'Three-ring perfluroocarbons - no acids' -> likely 'Three-ring perfluorocarbons - no acids'
+      'perfluroocarbons' -- same ECHA-source typo as above, inherited rather than new.
+
+==============================================================================
+5. row_share arithmetic check (row_share should equal n / row_total)
+==============================================================================
+  all rows consistent
+
+==============================================================================
+6. row_total arithmetic check (row_total should equal sum(n) per source group)
+==============================================================================
+  all rows consistent

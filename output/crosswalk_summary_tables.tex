@@ -1,0 +1,42 @@
+% Structural summary: distinct group labels per taxonomy,
+% as used across this crosswalk file.
+\begin{table}[htbp]
+\centering
+\caption{Number of distinct substance-group labels per source taxonomy.}
+\label{tab:pfas-taxonomy-structure}
+\begin{tabular}{lr}
+\toprule
+Taxonomy & Distinct groups \\
+\midrule
+KEMI & 9 \\
+OECD & 134 \\
+ESI-2 group & 13 \\
+ESI-2 subgroup & 75 \\
+Dalmijn & 13 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Pairwise crosswalk coverage: how many substances were matched
+% between each pair of taxonomies, and how many distinct groups
+% on each side were involved.
+\begin{table}[htbp]
+\centering
+\caption{Pairwise crosswalk coverage between substance-group taxonomies.}
+\label{tab:pfas-crosswalk-coverage}
+\begin{tabular}{llrrr}
+\toprule
+Source & Target & Matched substances & Source groups & Target groups \\
+\midrule
+KEMI & OECD & 4727 & 8 & 134 \\
+KEMI & ESI-2 group & 1681 & 8 & 13 \\
+KEMI & ESI-2 subgroup & 1681 & 8 & 75 \\
+KEMI & Dalmijn & 57 & 6 & 13 \\
+OECD & ESI-2 group & 669 & 76 & 12 \\
+OECD & ESI-2 subgroup & 669 & 76 & 61 \\
+OECD & Dalmijn & 42 & 22 & 11 \\
+ESI-2 group & Dalmijn & 39 & 7 & 8 \\
+ESI-2 subgroup & Dalmijn & 39 & 13 & 8 \\
+\bottomrule
+\end{tabular}
+\end{table}
